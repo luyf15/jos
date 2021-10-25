@@ -191,7 +191,8 @@ cga_putc(int c)
 		break;
 	}
 
-	// What is the purpose of this?
+	// the purpose of this
+	// Scorll down a single row to refresh newer contents when the console is full
 	if (crt_pos >= CRT_SIZE) {
 		int i;
 

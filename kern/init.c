@@ -23,7 +23,7 @@ void
 i386_init(void)
 {
 	extern char edata[], end[];
-
+	//static_assert(0);
 	// Before doing anything else, complete the ELF loading process.
 	// Clear the uninitialized global data (BSS) section of our program.
 	// This ensures that all static/global variables start out zero.
@@ -33,11 +33,21 @@ i386_init(void)
 	// Can't call cprintf until after we do this!
 	cons_init();
 
-	cprintf("6828 decimal is %o octal!\n", 6828);
+	//test for exercise 8
+	//int x = 1, y = 3, z = 4;
+	//cprintf("x %d, y %d, z %d\n", x, y ,z);
+    //unsigned int i = 0x00646c72;
+    //cprintf("H%x Wo%s\n", 57616, &i);
+	//cprintf("x=%d,y=%.8x\n",3);
 
+	//colored terminal
+	//cprintf(F_red);
+	cprintf("\n");
+	cprintf("6828 decimal is %o octal!\n", 6828);
 	// Test the stack backtrace function (lab 1 only)
 	test_backtrace(5);
-
+	
+	//cprintf(ATTR_OFF);
 	// Drop into the kernel monitor.
 	while (1)
 		monitor(NULL);
