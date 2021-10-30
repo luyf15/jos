@@ -160,7 +160,7 @@ cga_init(void)
 
 
 static void
-cga_putc(int c)
+cga_putc_legacy(int c)
 {
 	// if no attribute given, then use black on white
 	if (!(c & ~0xFF))
@@ -170,7 +170,8 @@ cga_putc(int c)
 	case '\b':
 		if (crt_pos > 0) {
 			crt_pos--;
-			crt_buf[crt_pos] = (c & ~0xff) | ' ';
+			// make easier to implement readline
+			// crt_buf[crt_pos] = (c & ~0xff) | ' ';
 		}
 		break;
 	case '\n':
@@ -209,6 +210,139 @@ cga_putc(int c)
 	outb(addr_6845 + 1, crt_pos);
 }
 
+// number in the esc_seq
+static int
+isdigit(int c)
+{
+	return (c >= '0' && c <='9');
+}
+
+//unique atoi() for ansi_esc_handler
+static int
+atoi(const char *s)
+{
+	int res = 0;
+	for (int i = 0; isdigit(s[i]);i++)
+		res = res * 10 + (s[i] - '0');
+	return res;
+}
+
+// only handle the color attributes
+// (maybe it can use for FONTS/UNDERLINE/BOLD)
+static void
+ansi_esc_seq_handler(const char* buf, int *attr)
+{
+	// mapping color codes in ANSI esc-sequence and thoes for VGA text mode
+	// see in stdio.h
+	static int nobright[]={0x0, 0x4, 0x2, 0x6, 0x1, 0x5, 0x3, 0x7};
+	static int bright[]={0x8, 0xc, 0xa, 0xe, 0x9, 0xd, 0xe, 0xf};
+	int tmp = *attr;
+	int n = atoi(buf);
+	// normal
+	if (n >= 30 && n <= 37)
+		tmp = (tmp & ~(0x0f)) | nobright[n - 30];
+	else if (n >= 40 && n <= 47)
+		tmp = (tmp & ~(0xf0)) | (nobright[n - 40] << 4);
+	// highlight
+	else if (n >= 90 && n <= 97)
+		tmp = (tmp & ~(0x0f)) | bright[n - 90];
+	else if (n >= 100 && n <= 107)
+		tmp = (tmp & ~(0x0f)) | (bright[n - 100] << 4);
+	// blink?
+	else if (n == 5){
+		if ((tmp >> 4) < 0x8)
+			tmp = tmp + 0x80;
+	}
+	// highlight?
+	else if (n == 1){
+		if ((tmp & ~(0xf0)) < 0x8)
+		tmp = tmp + 0x08;
+	}
+	// default
+	else if (n == 0)
+		tmp = 0x07;
+	*attr = tmp;
+}
+
+#define MAX_ESC_BUF 512
+
+static void
+cga_putc(int c)
+{
+	static int state = 0;
+	static char esc_buf[MAX_ESC_BUF];	//can esc-sequence have that large length?
+	static int esc_len = 0;
+	static int attr = 0;		//default attribute being used by VGA text mode
+	static int esc_attr = 0;
+
+	//stack overflow detection
+	if (esc_len >= MAX_ESC_BUF)
+		panic("A stack overflow detected! ANSI escape sequnence illegal length!\n");
+
+	switch(state){
+		case 0:{
+			if ((char)c == '\33')
+				state = 1;
+			else
+				cga_putc_legacy((attr << 8) | (c & 0xff));
+			break;
+		}
+		case 1:{
+			if ((char)c == '['){
+				esc_attr = attr;
+				state = 2;
+			}
+			else if ((char)c != '\33'){
+				state = 0;
+			}
+			break;
+		}
+		case 2:{
+			if (isdigit(c)){
+				esc_buf[esc_len++] = c;
+				state = 3;
+			}
+			else{
+				esc_len = 0;
+				state = 0;
+			}
+			break;
+		}
+		case 3:{
+			if (isdigit(c)){
+				esc_buf[esc_len++] = c;
+			}
+			else if ((char)c == 'm'){
+				// update attribute
+				esc_buf[esc_len++] = 0;
+				ansi_esc_seq_handler(esc_buf, &esc_attr);
+				esc_len = 0;
+				attr = esc_attr;
+				state = 0;
+			}else if ((char)c == ';') {
+				// record current modification
+				esc_buf[esc_len++] = 0;
+				ansi_esc_seq_handler(esc_buf, &esc_attr);
+				esc_len = 0;
+				state = 2;
+			}
+			// simply treat '\33[xxJ' as '\33[2J'
+			else if ((char)c == 'J'){
+				// clear the text buffer (uint16_t cga_buf[CRT_SIZE])
+				memset((uint16_t*) (KERNBASE + CGA_BUF), 0x0 , CRT_SIZE * sizeof(uint16_t));
+				crt_pos = 0;
+				esc_buf[esc_len++] = 0;
+				esc_len = 0;
+				state = 0;
+			}
+			else{
+				esc_len = 0;
+				state = 0;
+			}
+			break;	
+		}
+	}
+}
 
 /***** Keyboard input code *****/
 

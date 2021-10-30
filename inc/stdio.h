@@ -44,6 +44,19 @@
 #define B_cyan          ESC"[46m"
 #define B_white         ESC"[47m"
 
+enum{
+    COLOR_BLACK = 0,
+    COLOR_RED,
+    COLOR_GREEN,
+    COLOR_YELLOW,
+    COLOR_BLUE,
+    COLOR_MAGENTA,
+    COLOR_CYAN,
+    COLOR_WHITE,
+    COLOR_NUM,  //number of colors supported
+}cons_color;
+
+
 // lib/console.c
 void	cputchar(int c);
 int	getchar(void);
@@ -66,5 +79,18 @@ int	vfprintf(int fd, const char *fmt, va_list);
 
 // lib/readline.c
 char*	readline(const char *prompt);
+
+//set and reset foreground color
+void set_fgcolor(int color);
+void reset_fgcolor();
+
+//set and reset background color
+void set_bgcolor(int color);
+void reset_bgcolor();
+
+void highlight(int c);
+void lightdown();
+void reset_attr();
+int clear();
 
 #endif /* !JOS_INC_STDIO_H */
