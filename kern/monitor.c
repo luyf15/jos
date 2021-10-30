@@ -25,6 +25,8 @@ static struct Command commands[] = {
 	{ "help", "Display this list of commands", mon_help },
 	{ "kerninfo", "Display information about the kernel", mon_kerninfo },
 	{ "backtrace", "Backtrace current function callstack", mon_backtrace },
+	{ "clear", "Clear the console", mon_clear},
+	{ "rainbow", "Test the colored console", mon_rainbow}
 };
 
 /***** Implementations of basic kernel monitor commands *****/
@@ -33,9 +35,11 @@ int
 mon_help(int argc, char **argv, struct Trapframe *tf)
 {
 	int i;
-
-	for (i = 0; i < ARRAY_SIZE(commands); i++)
+	for (i = 0; i < ARRAY_SIZE(commands); i++){
+		set_fgcolor(i % COLOR_NUM ? i % COLOR_NUM : COLOR_NUM - 1);
 		cprintf("%s - %s\n", commands[i].name, commands[i].desc);
+	}
+	reset_fgcolor();
 	return 0;
 }
 
@@ -44,7 +48,8 @@ mon_kerninfo(int argc, char **argv, struct Trapframe *tf)
 {
 	extern char _start[], entry[], etext[], edata[], end[];
 
-	cprintf("Special kernel symbols:\n");
+	cprintf(F_blue B_white"Special kernel symbols:"ATTR_OFF"\n");
+	set_fgcolor(COLOR_MAGENTA);
 	cprintf("  _start                  %08x (phys)\n", _start);
 	cprintf("  entry  %08x (virt)  %08x (phys)\n", entry, entry - KERNBASE);
 	cprintf("  etext  %08x (virt)  %08x (phys)\n", etext, etext - KERNBASE);
@@ -52,6 +57,7 @@ mon_kerninfo(int argc, char **argv, struct Trapframe *tf)
 	cprintf("  end    %08x (virt)  %08x (phys)\n", end, end - KERNBASE);
 	cprintf("Kernel executable memory footprint: %dKB\n",
 		ROUNDUP(end - entry, 1024) / 1024);
+	reset_fgcolor();
 	return 0;
 }
 
@@ -59,14 +65,14 @@ int
 mon_backtrace(int argc, char **argv, struct Trapframe *tf)
 {
 	uint32_t ebp = read_ebp();
-	cprintf(F_yellow"Stack backtrace\n");
-	//char* color[4] = {F_magenta, F_cyan, F_red, F_blue};
-	//uint32_t count = 0;
+	set_fgcolor(COLOR_CYAN);
+	set_bgcolor(COLOR_YELLOW);
+	cprintf("Stack backtrace");
+	reset_bgcolor();
+	set_fgcolor(COLOR_RED);
 	while (ebp){
-		//count = count % 4;
-		//cprintf(color[count]);
 		uint32_t eip = (uint32_t)*((int *)ebp + 1);
-		cprintf("ebp %x  eip %x  args", ebp, eip);
+		cprintf("\nebp %x  eip %x  args", ebp, eip);
 		int *args = (int *)ebp + 2;
 		for (int i=0;i<4;i++)
 			cprintf(" %08.x ",args[i]);
@@ -79,7 +85,36 @@ mon_backtrace(int argc, char **argv, struct Trapframe *tf)
 		ebp = *(uint32_t *)ebp;
 		//count++ ;
 	}
-	cprintf(ATTR_OFF);
+	reset_fgcolor();
+	return 0;
+}
+
+int
+mon_clear(int argc, char **argv, struct Trapframe *tf)
+{
+	return clear();
+}
+
+
+void
+rainbow(int stride)
+{
+	static const char msg[] = "rainbow!";
+	for (int i = 0; i < COLOR_NUM; ++i) {
+		set_fgcolor(i);
+		set_bgcolor((i + stride) % COLOR_NUM);
+		cprintf("%c", msg[i % (sizeof(msg) - 1)]);
+	}
+	reset_fgcolor();
+	reset_bgcolor();
+	cprintf("\n");
+}
+ 
+int 
+mon_rainbow(int argc, char **argv, struct Trapframe *tf)
+{
+	for(int i = 1; i < COLOR_NUM; ++i)
+		rainbow(i);
 	return 0;
 }
 

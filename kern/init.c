@@ -24,25 +24,10 @@ i386_init(void)
 	// Can't call cprintf until after we do this!
 	cons_init();
 
-	//test for exercise 8
-	//int x = 1, y = 3, z = 4;
-	//cprintf("x %d, y %d, z %d\n", x, y ,z);
-    //unsigned int i = 0x00646c72;
-    //cprintf("H%x Wo%s\n", 57616, &i);
-	//cprintf("x=%d,y=%.8x\n",3);
-
-
 	// Lab 2 memory management initialization functions
 	mem_init();
 
-	//colored terminal
-	//cprintf(F_red);
-	//cprintf("\n");
-	//cprintf("6828 decimal is %o octal!\n", 6828);
-	// Test the stack backtrace function (lab 1 only)
-	//test_backtrace(5);
-	
-	//cprintf(ATTR_OFF);
+	cprintf("\n\33[5;31;43;1m6828 decimal is %o octal!\33[0m\n", 6828);
 
 	// Drop into the kernel monitor.
 	while (1)
