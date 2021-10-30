@@ -102,8 +102,19 @@ boot_alloc(uint32_t n)
 	// to a multiple of PGSIZE.
 	//
 	// LAB 2: Your code here.
-
-	return NULL;
+	if (n == 0) return nextfree;
+	cprintf("boot_alloc memory at %8.x\n", nextfree);
+	cprintf("next memory at %.8x\n", ROUNDUP((char *)(nextfree+n),PGSIZE));
+	
+	result = nextfree;
+	nextfree = ROUNDUP((char *)(nextfree + n),PGSIZE);
+	
+	if (nextfree > (char *)0xf0400000){		//only 4MB mapped on bootstrap
+		panic("boot_alloc: out of memory error!\n");
+		nextfree = result;	//resume nextfree
+		return NULL;
+	}
+	return result;
 }
 
 // Set up a two-level page table:
@@ -123,9 +134,6 @@ mem_init(void)
 
 	// Find out how much memory the machine has (npages & npages_basemem).
 	i386_detect_memory();
-
-	// Remove this line when you're ready to test this function.
-	panic("mem_init: This function is not finished\n");
 
 	//////////////////////////////////////////////////////////////////////
 	// create initial page directory.
@@ -148,7 +156,13 @@ mem_init(void)
 	// array.  'npages' is the number of physical pages in memory.  Use memset
 	// to initialize all fields of each struct PageInfo to 0.
 	// Your code goes here:
+	pages = (struct PageInfo *)boot_alloc(sizeof(struct PageInfo) * npages);
+	memset(pages,0,sizeof(struct PageInfo) * npages);
 
+	cprintf("npages: %d\n", npages); 	
+	cprintf("npages_basemem: %d\n", npages_basemem); 	
+	cprintf("pages start at: %.8x\n", pages);
+	cprintf("pages end at: %.8x\n", ((char*)pages) + (sizeof(struct PageInfo) * npages));
 
 	//////////////////////////////////////////////////////////////////////
 	// Now that we've allocated the initial kernel data structures, we set
@@ -157,11 +171,12 @@ mem_init(void)
 	// particular, we can now map memory using boot_map_region
 	// or page_insert
 	page_init();
-
 	check_page_free_list(1);
 	check_page_alloc();
 	check_page();
 
+	// Remove this line when you're ready to test this function.
+	panic("mem_init: This function is not finished\n");
 	//////////////////////////////////////////////////////////////////////
 	// Now we set up virtual memory
 
@@ -172,7 +187,7 @@ mem_init(void)
 	//      (ie. perm = PTE_U | PTE_P)
 	//    - pages itself -- kernel RW, user NONE
 	// Your code goes here:
-
+	
 	//////////////////////////////////////////////////////////////////////
 	// Use the physical memory that 'bootstack' refers to as the kernel
 	// stack.  The kernel stack grows down from virtual address KSTACKTOP.
@@ -247,16 +262,48 @@ page_init(void)
 	//     Some of it is in use, some is free. Where is the kernel
 	//     in physical memory?  Which pages are already in use for
 	//     page tables and other data structures?
-	//
-	// Change the code to reflect this.
-	// NB: DO NOT actually touch the physical memory corresponding to
-	// free pages!
+	/*
+	*                    Low Physical Memory Address Layout
+	*                     .       Managable Space        .
+	*                     .                              .
+	*   ends 0x157000  -->+------------------------------+ 
+	*                     |                              |  
+	*                     .   pages management array     .
+	*                     .          (pages)             .
+	*  pages 0x116000 ->  |       (kern_pgdir)           |  
+	*  pgdir 0x117000 ->  +------------------------------+  
+	*                     |        Kernel's here         |  
+	*    EXT 0x100000 ->  +------------------------------+  
+	*                     |          IO Hole             |  
+	* BASEMEM 0xa0000 ->  +------------------------------+  
+	*                     |    Basic Managable Space     |
+	*    KERNBASE ----->  +------------------------------+ 
+	*  (0xF0000000)=phys addr 0x0
+	*/
+	pages[0].pp_ref = 0;	//can't be referred!
+	pages[0].pp_link = NULL;
+	page_free_list = &pages[0];
 	size_t i;
-	for (i = 0; i < npages; i++) {
+	for (i = 1; i < npages_basemem; i++) {
+		pages[i].pp_ref = 0;
+		//linked each page
+		pages[i].pp_link = page_free_list;
+		page_free_list = &pages[i];
+	}
+
+	//jump over the gap between Base(IO) and Extended
+	//boot_alloc(0) returns "current" PG_aligned nextfree virt-addr
+	//last boot_alloc call allocated pages(=sizeofPageInfo*npages)
+	i = (size_t)PADDR(boot_alloc(0))/PGSIZE;
+	//int med = (int)ROUNDUP(((char*)pages) + (sizeof(struct PageInfo) * npages) - KERNBASE, PGSIZE)/PGSIZE;
+	//cprintf("med-i=%d\n", med-i);
+	for (; i < npages; i++){
 		pages[i].pp_ref = 0;
 		pages[i].pp_link = page_free_list;
 		page_free_list = &pages[i];
 	}
+	if (npages > 0)
+		pages[1].pp_link = NULL;
 }
 
 //
@@ -275,7 +322,14 @@ struct PageInfo *
 page_alloc(int alloc_flags)
 {
 	// Fill this function in
-	return 0;
+	if (page_free_list == NULL)
+		return 0;
+	struct PageInfo *target = page_free_list;
+	page_free_list = page_free_list->pp_link;	//next free page
+	target->pp_link = NULL;		//ensure target is out of free_list
+	if (alloc_flags & ALLOC_ZERO)
+		memset(page2kva(target), 0 ,PGSIZE);		//init a page from kaddr(target)
+	return target;
 }
 
 //
@@ -288,6 +342,10 @@ page_free(struct PageInfo *pp)
 	// Fill this function in
 	// Hint: You may want to panic if pp->pp_ref is nonzero or
 	// pp->pp_link is not NULL.
+	if (pp->pp_ref || pp->pp_link)
+		panic("page_free: can't free a page which is currently in use!\n");
+	pp->pp_link = page_free_list;
+	page_free_list = pp;
 }
 
 //
