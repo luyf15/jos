@@ -110,7 +110,7 @@ boot_alloc(uint32_t n)
 		nextfree = ROUNDUP((char *)(nextfree + n), PGSIZE);
 	
 	if (nextfree > (char *)0xf0400000){		//only 4MB mapped on bootstrap
-		panic("boot_alloc: out of memory error!\n");
+		panic("Out of memory!\n");
 		nextfree = result;	//resume nextfree
 		return NULL;
 	}
@@ -352,7 +352,7 @@ page_free(struct PageInfo *pp)
 	// Hint: You may want to panic if pp->pp_ref is nonzero or
 	// pp->pp_link is not NULL.
 	if (pp->pp_ref || pp->pp_link)
-		panic("page_free: can't free a page which is currently in use!\n");
+		panic("can't free a page which is currently in use!\n");
 	pp->pp_link = page_free_list;
 	page_free_list = pp;
 }
@@ -428,11 +428,11 @@ boot_map_region(pde_t *pgdir, uintptr_t va, size_t size, physaddr_t pa, int perm
 	pte_t *pte;
 
 	if ((va & (PGSIZE - 1)) || (pa & (PGSIZE - 1)) || (size % PGSIZE))
-		panic("boot_map_region:non page-aligned");
+		panic("non page-aligned");
 
 	for (i = 0; i < size; i+=PGSIZE){
 		if (!(pte = pgdir_walk(pgdir, (void*)(va + i), 1)))
-			panic("boot_map_region:failed to allocate a pagetable");
+			panic("failed to allocate a pagetable");
 		*pte = (pa + i) | perm | PTE_P;		//permissions in pte should be strict
 	}
 }
