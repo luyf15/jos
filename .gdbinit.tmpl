@@ -1,3 +1,4 @@
+source ~/.gef-915ff9114127a6c02301fb3faddb0976737269db.py
 set $lastcs = -1
 
 define hook-stop
@@ -31,3 +32,6 @@ symbol-file obj/kern/kernel
 
 # 0x7d81: call *0x10018
 b *0x7d81 
+
+# 0xf0100039: call i386_init
+b *0xf0100039

@@ -10,19 +10,9 @@
 #define ESC       "\33"
 #define ATTR_OFF ESC"[0m"                      // default: disable all atrributes
 
-#define L_move(n)       "\33[" #n "D"           // n: row
-#define R_move(n)       "\33[" #n "C"
-#define U_move(n)       "\33[" #n "A"
-#define D_move(n)       "\33[" #n "B"
-
-// accurate cursor location
-#define CUR_goto(x, y) "\33[" #x ";" #y "H"     // target (x, y)
-#define CUR_mark        ESC"[s"                 // mark current
-#define CUR_back        ESC"[u"                 // back to make
-
 #define SCR_clear       ESC"[2J"                // identical system("clear")
-#define ATTR_bold       ESC"[1m"                // identical bold
-#define ATTR_underline ESC"[4m"                 // identical underline
+#define ATTR_bold       ESC"[1m"                // bold
+#define ATTR_underline  ESC"[4m"                 // underline
 
 // Front color
 #define F_black         ESC"[30m"
@@ -44,20 +34,46 @@
 #define B_cyan          ESC"[46m"
 #define B_white         ESC"[47m"
 
+//color enum
+enum{
+    COLOR_BLACK = 0,
+    COLOR_RED,
+    COLOR_GREEN,
+    COLOR_YELLOW,
+    COLOR_BLUE,
+    COLOR_MAGENTA,
+    COLOR_CYAN,
+    COLOR_WHITE,
+    COLOR_NUM,  //number of colors supported
+};
+
 // lib/console.c
-void	cputchar(int c);
-int	getchar(void);
-int	iscons(int fd);
+void    cputchar(int c);
+int getchar(void);
+int iscons(int fd);
 
 // lib/printfmt.c
-void	printfmt(void (*putch)(int, void*), void *putdat, const char *fmt, ...);
-void	vprintfmt(void (*putch)(int, void*), void *putdat, const char *fmt, va_list);
+void    printfmt(void (*putch)(int, void*), void *putdat, const char *fmt, ...);
+void    vprintfmt(void (*putch)(int, void*), void *putdat, const char *fmt, va_list);
 int	snprintf(char *str, int size, const char *fmt, ...);
 int	vsnprintf(char *str, int size, const char *fmt, va_list);
 
 // lib/printf.c
 int	cprintf(const char *fmt, ...);
 int	vcprintf(const char *fmt, va_list);
+
+//set and reset foreground color
+void set_fgcolor(int color);
+void reset_fgcolor();
+
+//set and reset background color
+void set_bgcolor(int color);
+void reset_bgcolor();
+
+void highlight(int c);
+void lightdown();
+void reset_attr();
+int clear();
 
 // lib/fprintf.c
 int	printf(const char *fmt, ...);
