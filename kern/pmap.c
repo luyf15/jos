@@ -102,8 +102,8 @@ boot_alloc(uint32_t n)
 	// to a multiple of PGSIZE.
 	//
 	// LAB 2: Your code here.
-	cprintf("boot_alloc memory at %8.x\n", nextfree);
-	cprintf("next memory at %.8x\n", ROUNDUP((char *)(nextfree+n),PGSIZE));
+	//cprintf("boot_alloc memory at %8.x\n", nextfree);
+	//cprintf("next memory at %.8x\n", ROUNDUP((char *)(nextfree+n),PGSIZE));
 	
 	result = nextfree;
 	if (n > 0)
@@ -395,6 +395,7 @@ pgdir_walk(pde_t *pgdir, const void *va, int create)
 {
 	// Fill this function in
 	pde_t *pde;
+	pte_t *pgt;
 	struct PageInfo * pi;
 
 	pde = &pgdir[PDX(va)];
@@ -404,8 +405,8 @@ pgdir_walk(pde_t *pgdir, const void *va, int create)
 		*pde = page2pa(pi) | PTE_P | PTE_W | PTE_U | PTE_PWT | PTE_PCD | PTE_G | PTE_PS;
 		pi->pp_ref++;
 	}
-	pde = KADDR(PTE_ADDR(*pde));	//kva of the page table
-	return (pde + PTX(va));
+	pgt = KADDR(PTE_ADDR(*pde));	//kva of the page table
+	return (pgt + PTX(va));
 }
 
 //
@@ -429,7 +430,7 @@ boot_map_region(pde_t *pgdir, uintptr_t va, size_t size, physaddr_t pa, int perm
 	if ((va & (PGSIZE - 1)) || (pa & (PGSIZE - 1)) || (size % PGSIZE))
 		panic("boot_map_region:non page-aligned");
 
-	for (i = 0; i < size; i++){
+	for (i = 0; i < size; i+=PGSIZE){
 		if (!(pte = pgdir_walk(pgdir, (void*)(va + i), 1)))
 			panic("boot_map_region:failed to allocate a pagetable");
 		*pte = (pa + i) | perm | PTE_P;		//permissions in pte should be strict
