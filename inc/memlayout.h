@@ -4,6 +4,7 @@
 #ifndef __ASSEMBLER__
 #include <inc/types.h>
 #include <inc/mmu.h>
+#include <inc/list.h>
 #endif /* not __ASSEMBLER__ */
 
 /*
@@ -84,7 +85,9 @@
 
 
 // All physical memory mapped at this address
-#define	KERNBASE	0xF0000000
+#define	KERNBASE	0xE0000000
+#define KERNSIZE	0x20000000
+#define KERNTOP		(KERNBASE + KERNSIZE)
 
 // At IOPHYSMEM (640K) there is a 384K hole for I/O.  From the kernel,
 // IOPHYSMEM can be addressed at KERNBASE + IOPHYSMEM.  The hole ends
@@ -174,7 +177,7 @@ extern volatile pde_t uvpd[];     // VA of current page directory
  */
 struct PageInfo {
 	// Next page on the free list.
-	struct PageInfo *pp_link;
+	list_entry_t pp_link;
 
 	// pp_ref is the count of pointers (usually in page table entries)
 	// to this page, for pages allocated using page_alloc.
@@ -184,5 +187,13 @@ struct PageInfo {
 	uint16_t pp_ref;
 };
 
+/* free_area_t - maintains a doubly linked list to record free (unused) pages */
+typedef struct {
+    list_entry_t free_list;         // the list header
+    unsigned int nr_free;           // # of free pages in this free list
+} free_area_t;
+
+#define le2page(le, member)	\
+    to_struct((le), struct PageInfo, member)
 #endif /* !__ASSEMBLER__ */
 #endif /* !JOS_INC_MEMLAYOUT_H */

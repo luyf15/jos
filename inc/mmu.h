@@ -47,6 +47,7 @@
 
 #define PGSIZE		4096		// bytes mapped by a page
 #define PGSHIFT		12		// log2(PGSIZE)
+#define LPGSIZE		(PGSIZE*NPTENTRIES)		//CR4.PSE = 1 && PDE.PS = 1
 
 #define PTSIZE		(PGSIZE*NPTENTRIES) // bytes mapped by a page directory entry
 #define PTSHIFT		22		// log2(PTSIZE)
@@ -91,6 +92,7 @@
 #define CR4_PCE		0x00000100	// Performance counter enable
 #define CR4_MCE		0x00000040	// Machine Check Enable
 #define CR4_PSE		0x00000010	// Page Size Extensions
+#define CR4_PAE		0x00000020	// Page Address Extensions
 #define CR4_DE		0x00000008	// Debugging Extensions
 #define CR4_TSD		0x00000004	// Time Stamp Disable
 #define CR4_PVI		0x00000002	// Protected-Mode Virtual Interrupts

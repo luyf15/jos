@@ -19,4 +19,6 @@ int mon_clear(int argc, char **argv, struct Trapframe *tf);
 
 // Colored Console Test
 int mon_rainbow(int argc, char **argv, struct Trapframe *tf);
+// cpuid in console
+int mon_cpuid(int argc, char **argv, struct Trapframe *tf);
 #endif	// !JOS_KERN_MONITOR_H

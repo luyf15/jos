@@ -168,6 +168,35 @@ memmove(void *dst, const void *src, size_t n)
 	return dst;
 }
 
+bool
+isdigit(int a)
+{
+	return (a >= '0' && a <= '9');
+}
+
+bool
+isspace(const char a)
+{
+	return (a == ' ' || a == '\t' || a == '\n' || a == '\v' || a == '\f' || a == '\r');
+}
+
+int
+atoi(const char *s)
+{
+	if (s == NULL) return 0;
+	int res = 0;
+	int flag = 1;
+	while(isspace(*s)) ++s;
+	if(*s == '-'){
+        flag = -1;
+		++s;
+    }
+	for (int i = 0; isdigit(s[i]); i++)
+		res = res * 10 + (s[i] - '0');
+	return res * flag;
+}
+
+
 #else
 
 void *

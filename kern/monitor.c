@@ -26,7 +26,8 @@ static struct Command commands[] = {
 	{ "kerninfo", "Display information about the kernel", mon_kerninfo },
 	{ "backtrace", "Backtrace current function callstack", mon_backtrace },
 	{ "clear", "Clear the console", mon_clear},
-	{ "rainbow", "Test the colored console", mon_rainbow}
+	{ "rainbow", "Test the colored console", mon_rainbow},
+	{ "cpuid", "CPUID output in console", mon_cpuid}
 };
 
 /***** Implementations of basic kernel monitor commands *****/
@@ -118,6 +119,17 @@ mon_rainbow(int argc, char **argv, struct Trapframe *tf)
 	return 0;
 }
 
+int
+mon_cpuid(int argc, char **argv, struct Trapframe *tf)
+{
+	highlight(1);
+	if (argc >= 2)
+		print_cpuid(atoi(argv[1]));
+	else
+		print_cpuid(1);
+	lightdown();
+	return 0;
+}
 /***** Kernel monitor command interpreter *****/
 
 #define WHITESPACE "\t\r\n "

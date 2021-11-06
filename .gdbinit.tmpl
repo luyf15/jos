@@ -31,7 +31,7 @@ echo + symbol-file obj/kern/kernel\n
 symbol-file obj/kern/kernel
 
 # 0x7d81: call *0x10018
-b *0x7d81 
+# b *0x7d81 
 
-# 0xf0100039: call i386_init
-b *0xf0100039
+# 0xe0100039: call i386_init
+b i386_init

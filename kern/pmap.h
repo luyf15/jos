@@ -54,6 +54,7 @@ void	mem_init(void);
 
 void	page_init(void);
 struct PageInfo *page_alloc(int alloc_flags);
+struct PageInfo *page4M_alloc(int alloc_flags);
 void	page_free(struct PageInfo *pp);
 int	page_insert(pde_t *pgdir, struct PageInfo *pp, void *va, int perm);
 void	page_remove(pde_t *pgdir, void *va);

@@ -83,4 +83,7 @@ int	vfprintf(int fd, const char *fmt, va_list);
 // lib/readline.c
 char*	readline(const char *prompt);
 
+// kern/cpuid.c
+void print_cpuid(int show);
+
 #endif /* !JOS_INC_STDIO_H */

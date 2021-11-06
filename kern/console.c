@@ -220,22 +220,6 @@ cga_putc_legacy(int c)
 	outb(addr_6845 + 1, crt_pos);
 }
 
-static int
-isdigit(int c)
-{
-	return (c >= '0' && c <='9');
-}
-
-// extract number in the ansi_esc_seq
-static int
-atoi(const char *s)
-{
-	int res = 0;
-	for (int i = 0; isdigit(s[i]);i++)
-		res = res * 10 + (s[i] - '0');
-	return res;
-}
-
 // only handle the color attributes
 // (maybe it can use for FONTS/UNDERLINE/BOLD)
 static void
