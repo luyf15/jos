@@ -41,7 +41,7 @@ i386_init(void)
 	cprintf("white\n");
 
 	print_cpuid(0);
-	//cprintf("\33[31;5;46;33;1;42mabcdefg\b\33[0m\n");
+	cprintf("\33[31;5;46;33;1;42mabcdefg\b\33[0m\n");
     
 	reset_attr();
 	//unsigned int i = 0x00646c72;

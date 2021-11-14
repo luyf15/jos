@@ -29,8 +29,8 @@ intel_detect(){
     }
 }
 
-// show > 0: print to console, storage won't modify
-// show < 0: no print, next call will refresh storage
+// show > 0: print to console, current vars won't modify
+// show < 0: no print, but refresh vars
 // show = 0: nothing occured
 void
 print_cpuid(int show){

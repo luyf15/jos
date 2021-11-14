@@ -5,6 +5,7 @@
 #include <inc/types.h>
 #include <inc/mmu.h>
 #include <inc/list.h>
+#include <inc/atomic.h>
 #endif /* not __ASSEMBLER__ */
 
 /*
@@ -178,14 +179,28 @@ extern volatile pde_t uvpd[];     // VA of current page directory
 struct PageInfo {
 	// Next page on the free list.
 	list_entry_t pp_link;
+     // array of flags that describe the status of the page frame
+	uint32_t flags;
+    // the num of free block, used in first fit pm manager
+    unsigned int property;
 
 	// pp_ref is the count of pointers (usually in page table entries)
 	// to this page, for pages allocated using page_alloc.
 	// Pages allocated at boot time using pmap.c's
 	// boot_alloc do not have valid reference count fields.
-
 	uint16_t pp_ref;
 };
+
+/* Flags describing the status of a page frame */
+#define PG_reserved                 0       // the page descriptor is reserved for kernel or unusable
+#define PG_property                 1       // the member 'property' is valid
+
+#define SetPageReserved(page)       set_bit(PG_reserved, &((page)->flags))
+#define ClearPageReserved(page)     clear_bit(PG_reserved, &((page)->flags))
+#define PageReserved(page)          test_bit(PG_reserved, &((page)->flags))
+#define SetPageProperty(page)       set_bit(PG_property, &((page)->flags))
+#define ClearPageProperty(page)     clear_bit(PG_property, &((page)->flags))
+#define PageProperty(page)          test_bit(PG_property, &((page)->flags))
 
 /* free_area_t - maintains a doubly linked list to record free (unused) pages */
 typedef struct {

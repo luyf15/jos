@@ -47,9 +47,9 @@
 
 #define PGSIZE		4096		// bytes mapped by a page
 #define PGSHIFT		12		// log2(PGSIZE)
-#define LPGSIZE		(PGSIZE*NPTENTRIES)		//CR4.PSE = 1 && PDE.PS = 1
 
 #define PTSIZE		(PGSIZE*NPTENTRIES) // bytes mapped by a page directory entry
+#define LPGSIZE		PTSIZE		//CR4.PSE = 1 && PDE.PS = 1
 #define PTSHIFT		22		// log2(PTSIZE)
 
 #define PTXSHIFT	12		// offset of PTX in a linear address

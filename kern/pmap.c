@@ -268,34 +268,19 @@ page_init(void)
 	//     Some of it is in use, some is free. Where is the kernel
 	//     in physical memory?  Which pages are already in use for
 	//     page tables and other data structures?
-	/*
-	*                    Low Physical Memory Address Layout
-	*                     .       Managable Space        .
-	*                     .                              .
-	*   ends 0x157000  -->+------------------------------+ 
-	*                     |                              |  
-	*                     .   pages management array     .
-	*                     .          (pages)             .
-	*  pages 0x116000 ->  |       (kern_pgdir)           |  
-	*  pgdir 0x117000 ->  +------------------------------+  
-	*                     |        Kernel's here         |  
-	*    EXT 0x100000 ->  +------------------------------+  
-	*                     |          IO Hole             |  
-	* BASEMEM 0xa0000 ->  +------------------------------+  
-	*                     |    Basic Managable Space     |
-	*    KERNBASE ----->  +------------------------------+ 
-	*  (0xF0000000)=phys addr 0x0
-	*/
 #define MARK_FREE(_i) do {\
     pages[_i].pp_ref = 0;\
     list_add_before(&page_free_list, &(pages[_i].pp_link));\
+	pages[_i].flags = 0x10;\
+	pages[_i].property = 0;\
 	nr_free++;\
-} while(0)
+	} while(0)
 #define MARK_USE(_i) do {\
     pages[_i].pp_ref = 0;\
     pages[_i].pp_link.next = &(pages[_i].pp_link);\
 	pages[_i].pp_link.prev = &(pages[_i].pp_link);\
-} while(0)
+	SetPageReserved(&pages[_i]);\
+	} while(0)
 
     physaddr_t boot_alloc_end;
 	size_t i;
@@ -304,11 +289,10 @@ page_init(void)
 	//boot_alloc(0) returns "current" PG_aligned nextfree virt-addr
 	//last boot_alloc call allocated pages(=sizeofPageInfo*npages)
     boot_alloc_end = PADDR(boot_alloc(0));
-	//int med = (int)ROUNDUP(((char*)pages) + (sizeof(struct PageInfo) * npages) - KERNBASE, PGSIZE)/PGSIZE;
-	//cprintf("med-i=%d\n", med - boot_alloc_end);
     MARK_USE(0);
     for (i = 1; i < npages_basemem; ++i)
         MARK_FREE(i);
+	pages[1].property = npages_basemem - 1;
     for (i = IOPHYSMEM / PGSIZE; i < EXTPHYSMEM / PGSIZE; ++i)
         MARK_USE(i);
 	//kernel_base to last boot_alloc end
@@ -316,10 +300,13 @@ page_init(void)
         MARK_USE(i);
     for (i = boot_alloc_end / PGSIZE; i < npages; ++i)
         MARK_FREE(i);
+	pages[boot_alloc_end / PGSIZE].property = npages - boot_alloc_end / PGSIZE;
 
 #undef MARK_USE
 #undef MARK_FREE
 }
+
+
 
 //
 // Allocates a physical page.  If (alloc_flags & ALLOC_ZERO), fills the entire
@@ -334,22 +321,39 @@ page_init(void)
 //
 // Hint: use page2kva and memset
 struct PageInfo *
-page_alloc(int alloc_flags)
+alloc_pages(size_t n, int alloc_flags)
 {
 	// Fill this function in
-	if (page_free_list.next == &page_free_list && page_free_list.prev == &page_free_list)
-		return 0;
-	list_entry_t *le;
-	le = &page_free_list;
-	le = list_next(le);
-	struct PageInfo *target = le2page(le, pp_link);
-	list_del(le);	//next free page
-	target->pp_link.next = &(target->pp_link);
-	target->pp_link.prev = &(target->pp_link);		//ensure target is out of free_list
-	nr_free -= 1;
-	if (alloc_flags & ALLOC_ZERO)
-		memset(page2kva(target), 0, PGSIZE);		//init a page from kaddr(target)
-	return target;
+	assert(n > 0);
+    if (n > nr_free)
+        return NULL;
+    list_entry_t *le, *len;
+    le = &page_free_list;
+
+    while ((le=list_next(le)) != &page_free_list){
+    	struct PageInfo *p = le2page(le, pp_link);
+    	if(p->property >= n){
+			int i;
+			for(i = 0; i < n; i ++){
+				len = list_next(le);
+				struct PageInfo *pp = le2page(le, pp_link);
+				SetPageReserved(pp);
+				ClearPageProperty(pp);
+				list_del(le);
+				le = len;
+			}
+			if(p->property > n)
+				(le2page(le,pp_link))->property = p->property - n;
+
+			ClearPageProperty(p);
+			SetPageReserved(p);
+			nr_free -= n;
+			if (alloc_flags & ALLOC_ZERO)
+				memset(page2kva(p), 0, PGSIZE*n);		//init pages from kaddr(target)
+			return p;
+      }
+    }
+    return NULL;
 }
 
 //
@@ -357,31 +361,51 @@ page_alloc(int alloc_flags)
 // (This function should only be called when pp->pp_ref reaches 0.)
 //
 void
-page_free(struct PageInfo *pp)
+free_pages(struct PageInfo *base, size_t n)
 {
 	// Fill this function in
 	// Hint: You may want to panic if pp->pp_ref is nonzero or
 	// pp->pp_link is not NULL.
-	if (pp->pp_ref || (pp->pp_link.next != pp->pp_link.prev))
-		panic("can't free a page which is currently in use!\n");
+	assert(PageReserved(base));
+	assert(!base->pp_ref);
+	assert(n > 0);
 	list_entry_t *le = &page_free_list;
-	if (list_empty(le)){
-		list_add_before(le, &(pp->pp_link));
-		nr_free += 1;
-		return;
-	}
+	struct PageInfo *p;
+
+	// Find the exact position of page_free_list to insert pages
+	// The worse case: le = &page_free_list——insert begins from tail
 	while((le=list_next(le)) != &page_free_list) {
-    	if(le > pp->pp_link.next && ( le->prev < pp->pp_link.next || le->next->prev > pp->pp_link.next)){
-        	list_add_before(le, &(pp->pp_link));
-			nr_free += 1;
-			break;
-      	}
-		else if (le->next == &page_free_list){
-			list_add_after(le, &(pp->pp_link));
-			nr_free += 1;
-			break;
-		}
+    	p = le2page(le, pp_link);
+    	if(p > base) break;
     }
+
+	for(p = base; p < base + n; p++)
+    	list_add_before(le, &(p->pp_link));
+    base->flags = 0;
+    SetPageProperty(base);
+    base->property = n;
+    
+	// merge the current continuous free physical pages
+    p = le2page(le,pp_link) ;
+    if( base + n == p ){
+      	base->property += p->property;
+      	p->property = 0;
+    }
+    le = list_prev(&(base->pp_link));
+    p = le2page(le, pp_link);
+    if(le != &page_free_list && p == base - 1){ //still some free pages before "base", may be able to merge
+    	while (le != &page_free_list){
+    		if(p->property){	// the head of free page block
+				p->property += base->property;
+				base->property = 0;
+				break;
+        	}
+			le = list_prev(le);
+			p = le2page(le,pp_link);
+      	}
+    }
+    nr_free += n;
+    return;
 }
 
 //
@@ -910,7 +934,7 @@ check_page(void)
 	// test re-inserting pp1 at PGSIZE
 	assert(page_insert(kern_pgdir, pp1, (void*) PGSIZE, 0) == 0);
 	assert(pp1->pp_ref);
-	assert(pp1->pp_link.next == pp1->pp_link.prev);
+	assert(PageReserved(pp1));
 
 	// unmapping pp1 at PGSIZE should free it
 	page_remove(kern_pgdir, (void*) PGSIZE);
