@@ -70,15 +70,20 @@ typedef int32_t off_t;
 #define ARRAY_SIZE(a)	(sizeof(a) / sizeof(a[0]))
 
 // Return the offset of 'member' relative to the beginning of a struct type
-#define offsetof(type, member)  ((size_t) (&((type*)0)->member))
+#define offsetof(type, member)  ((size_t) (&((type *)0) -> member))
 
 /* *
- * to_struct - get the struct from a ptr
+ * to_struct - get the struct from a ptrr
  * @ptr:    a struct pointer of member
  * @type:   the type of the struct this is embedded in
  * @member: the name of the member within the struct
  * */
 #define to_struct(ptr, type, member)                               \
     ((type *)((char *)(ptr) - offsetof(type, member)))
+
+// alias
+#define list_entry(ptr,type,member) (to_struct(ptr,type,member))
+#define for_each_entry(itr,list_head) \
+	for(itr = (list_head) -> next; itr != list_head; itr = itr -> next)
 
 #endif /* !JOS_INC_TYPES_H */

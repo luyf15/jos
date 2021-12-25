@@ -65,6 +65,7 @@ i386_detect_memory(void)
 // --------------------------------------------------------------
 
 static void boot_map_region(pde_t *pgdir, uintptr_t va, size_t size, physaddr_t pa, int perm);
+static void boot_map_pse_region(pde_t *pgdir, uintptr_t va, size_t size, physaddr_t pa, int perm);
 static void check_page_free_list(bool only_low_memory);
 static void check_page_alloc(void);
 static void check_kern_pgdir(void);
@@ -112,7 +113,7 @@ boot_alloc(uint32_t n)
 	if (n > 0)
 		nextfree = ROUNDUP((char *)(nextfree + n), PGSIZE);
 	
-	if (nextfree > (char *)(KERNBASE+0x400000)){		//only 4MB mapped on bootstrap
+	if (nextfree > (char *)(KERNBASE + 0x400000)){		//only 4MB mapped on bootstrap
 		panic("Out of memory!\n");
 		nextfree = result;	//resume nextfree
 		return NULL;
@@ -214,7 +215,10 @@ mem_init(void)
 	// we just set up the mapping anyway.
 	// Permissions: kernel RW, user NONE
 	// Your code goes here:
-	boot_map_region(kern_pgdir, KERNBASE, ~(unsigned int)0-KERNBASE+1, 0, PTE_W);
+	if (pae_support && pse_support)
+		boot_map_pse_region(kern_pgdir, KERNBASE, ROUNDUP((~KERNBASE)+1,LPGSIZE), 0, PTE_W);
+	else
+		boot_map_region(kern_pgdir, KERNBASE, ~(KERNBASE)+1, 0, PTE_W);
 	// Check that the initial page directory has been set up correctly.
 	check_kern_pgdir();
 
@@ -225,6 +229,9 @@ mem_init(void)
 	//
 	// If the machine reboots at this point, you've probably set up your
 	// kern_pgdir wrong.
+	if (pae_support && pse_support)
+		lcr4(rcr4()|CR4_PSE);
+
 	lcr3(PADDR(kern_pgdir));
 
 	check_page_free_list(0);
@@ -246,12 +253,11 @@ mem_init(void)
 // Pages are reference counted, and free pages are kept on a linked list.
 // --------------------------------------------------------------
 
-//
+
 // Initialize page structure and memory free list.
 // After this is done, NEVER use boot_alloc again.  ONLY use the page
 // allocator functions below to allocate and deallocate physical
 // memory via the page_free_list.
-//
 void
 page_init(void)
 {
@@ -271,7 +277,7 @@ page_init(void)
 #define MARK_FREE(_i) do {\
     pages[_i].pp_ref = 0;\
     list_add_before(&page_free_list, &(pages[_i].pp_link));\
-	pages[_i].flags = 0x10;\
+	pages[_i].flags = 0x2;\
 	pages[_i].property = 0;\
 	nr_free++;\
 	} while(0)
@@ -307,8 +313,6 @@ page_init(void)
 }
 
 
-
-//
 // Allocates a physical page.  If (alloc_flags & ALLOC_ZERO), fills the entire
 // returned physical page with '\0' bytes.  Does NOT increment the reference
 // count of the page - the caller must do these if necessary (either explicitly
@@ -356,7 +360,6 @@ alloc_pages(size_t n, int alloc_flags)
     return NULL;
 }
 
-//
 // Return a page to the free list.
 // (This function should only be called when pp->pp_ref reaches 0.)
 //
@@ -453,14 +456,13 @@ pgdir_walk(pde_t *pgdir, const void *va, int create)
 	if (!(*pde & PTE_P)){	//pde not present
 		if (!create || !(pi = page_alloc(ALLOC_ZERO)))	//won't create or fail to allocate a pagetable
 			return NULL;
-		*pde = page2pa(pi) | PTE_P | PTE_W | PTE_U | PTE_PWT | PTE_PCD | PTE_G | PTE_PS;
+		*pde = page2pa(pi) | PTE_P | PTE_W | PTE_U | PTE_PWT | PTE_PCD | PTE_G;
 		pi->pp_ref++;
 	}
 	pgt = KADDR(PTE_ADDR(*pde));	//kva of the page table
 	return (pgt + PTX(va));
 }
 
-//
 // Map [va, va+size) of virtual address space to physical [pa, pa+size)
 // in the page table rooted at pgdir.  Size is a multiple of PGSIZE, and
 // va and pa are both page-aligned.
@@ -481,10 +483,33 @@ boot_map_region(pde_t *pgdir, uintptr_t va, size_t size, physaddr_t pa, int perm
 	if ((va & (PGSIZE - 1)) || (pa & (PGSIZE - 1)) || (size % PGSIZE))
 		panic("non page-aligned");
 
-	for (i = 0; i < size; i+=PGSIZE){
+	for (i = 0; i < size; i += PGSIZE){
 		if (!(pte = pgdir_walk(pgdir, (void*)(va + i), 1)))
 			panic("failed to allocate a pagetable");
-		*pte = (pa + i) | perm | PTE_P;		//permissions in pte should be strict
+		*pte = (pa + i) | perm | PTE_P;		//permissions in p should be strict
+	}
+}
+
+// Map [va, va+size) of virtual address space to physical [pa, pa+size)
+// in the pgdir as a large 4M page. Size is a multiple of LPGSIZE, and
+// va and pa are both 4Mpage-aligned.
+// Use permission bits perm|PTE_P for the entries.
+//
+// This function is only intended to set up the ``static'' mappings
+// above UTOP. As such, it should *not* change the pp_ref field on the
+// mapped pages.
+static void
+boot_map_pse_region(pde_t *pgdir, uintptr_t va, size_t size, physaddr_t pa, int perm)
+{
+	// Fill this function in
+	size_t i;
+
+	if ((va & (LPGSIZE - 1)) || (pa & (LPGSIZE - 1)) || (size % LPGSIZE))
+		panic("non 4Mpage-aligned");
+
+	for (i = 0; i < size; i += LPGSIZE){
+		pgdir[PDX(va + i)] = 
+			(pde_t) ((pa + i) | perm | PTE_P | PTE_PS);		//permissions should be strict cos it's used as a pte
 	}
 }
 
@@ -780,7 +805,7 @@ check_kern_pgdir(void)
 
 
 	// check phys mem
-	for (i = 0; i < npages * PGSIZE; i += PGSIZE)
+	for (i = 0; i < npages * PGSIZE; i += LPGSIZE)
 		assert(check_va2pa(pgdir, KERNBASE + i) == i);
 
 	// check kernel stack
@@ -821,10 +846,22 @@ check_va2pa(pde_t *pgdir, uintptr_t va)
 	pgdir = &pgdir[PDX(va)];
 	if (!(*pgdir & PTE_P))
 		return ~0;
-	p = (pte_t*) KADDR(PTE_ADDR(*pgdir));
-	if (!(p[PTX(va)] & PTE_P))
-		return ~0;
-	return PTE_ADDR(p[PTX(va)]);
+	
+	if (pae_support && pse_support) {
+		if (!(*pgdir & PTE_PS)) {
+			p = (pte_t*) KADDR(PTE_ADDR(*pgdir));
+			if (!(p[PTX(va)] & PTE_P))
+				return ~0;
+			return PTE_ADDR(p[PTX(va)]);
+		} else
+			return PTE_ADDR(*pgdir);	//pde is used as pte
+
+	} else {
+		p = (pte_t*) KADDR(PTE_ADDR(*pgdir));
+		if (!(p[PTX(va)] & PTE_P))
+			return ~0;
+		return PTE_ADDR(p[PTX(va)]);
+	}
 }
 
 
