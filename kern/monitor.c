@@ -7,12 +7,13 @@
 #include <inc/assert.h>
 #include <inc/x86.h>
 
+#include <kern/pmap.h>
 #include <kern/console.h>
 #include <kern/monitor.h>
 #include <kern/kdebug.h>
 
 #define CMDBUF_SIZE	80	// enough for one VGA text line
-
+extern pde_t *kern_pgdir;
 
 struct Command {
 	const char *name;
@@ -27,7 +28,10 @@ static struct Command commands[] = {
 	{ "backtrace", "Backtrace current function callstack", mon_backtrace },
 	{ "clear", "Clear the console", mon_clear},
 	{ "rainbow", "Test the colored console", mon_rainbow},
-	{ "cpuid", "CPUID output in console", mon_cpuid}
+	{ "cpuid", "CPUID output in console", mon_cpuid},
+	{ "showmap", "Show the mappings between given virtual memory range", mon_showmap },
+    { "setperm", "Set the permission bits of a given mapping", mon_setperm },
+    { "dumpmem", "Dump the content of a given virtual/physical memory range", mon_dumpmem},
 };
 
 /***** Implementations of basic kernel monitor commands *****/
@@ -36,11 +40,13 @@ int
 mon_help(int argc, char **argv, struct Trapframe *tf)
 {
 	int i;
+	//highlight(1);
 	for (i = 0; i < ARRAY_SIZE(commands); i++){
-		set_fgcolor(i+1);
+		set_fgcolor((i + 1) % COLOR_NUM);
 		cprintf("%s - %s\n", commands[i].name, commands[i].desc);
 	}
 	reset_fgcolor();
+	//lightdown();
 	return 0;
 }
 
@@ -56,6 +62,7 @@ mon_kerninfo(int argc, char **argv, struct Trapframe *tf)
 	cprintf("  etext  %08x (virt)  %08x (phys)\n", etext, etext - KERNBASE);
 	cprintf("  edata  %08x (virt)  %08x (phys)\n", edata, edata - KERNBASE);
 	cprintf("  end    %08x (virt)  %08x (phys)\n", end, end - KERNBASE);
+	cprintf("  kern_pgdir  %08x (virt)  %08x (phys)\n", kern_pgdir, UVPT);
 	cprintf("Kernel executable memory footprint: %dKB\n",
 		ROUNDUP(end - entry, 1024) / 1024);
 	reset_fgcolor();
@@ -130,6 +137,148 @@ mon_cpuid(int argc, char **argv, struct Trapframe *tf)
 	lightdown();
 	return 0;
 }
+
+// map a capital character to permission bitnum
+static inline uint32_t
+char2perm(char c) {
+	switch (c)
+	{
+		case 'G': return PTE_G;	//0x100
+		case 'S': return PTE_PS;	//0x80
+		case 'D': return PTE_D;	//0x40
+		case 'A': return PTE_A;	//0x20
+		case 'C': return PTE_PCD;	//0x10
+		case 'T': return PTE_PWT;	//0x8
+		case 'U': return PTE_U;	//0x4
+		case 'W': return PTE_W;	//0x2
+		case 'P': return PTE_P;	//0x1
+		default: return -1;
+	}
+}
+
+static const char* perm_string = "PWUTCADSG";
+
+// permission number to a string of capital character
+static inline void
+perm2str(char* target, uint32_t perm) {
+	if (perm >= 0x200) {
+		warn("unexcepted page permission!\n");
+		perm -= 0x200;
+	}
+
+	int i;
+	for (i = 8; i >= 0; i -= 1) {
+		if (perm & (1 << i)) {
+			target[8 - i] = perm_string[i];
+		}
+		else
+			target[i] = '-';
+	}
+}
+
+// map a string of capital character to permission number
+static inline uint32_t
+str2perm(char* str){
+	uint32_t perm = 0;
+	while(*str)
+		perm |= char2perm(*str++);
+	if(perm < 0)
+		panic("Wrong permission argument\n");
+	// setting P bit should be forbidden
+	perm &= ~char2perm('P');
+	return perm;
+}
+
+#define PDE(pgdir,va) (pgdir[(PDX(va))])
+#define PTE_PTR(pgdir,va) (((pte_t*) KADDR(PTE_ADDR(PDE(pgdir,va)))) + PTX(va))
+#define PTE(pgdir,va) (*(PTE_PTR(pgdir,va)))
+#define PERM(entry) (entry && 0xFFF)
+
+int
+mon_showmap(int argc, char **argv, struct Trapframe *tf)
+{
+	static const char *msg = 
+    "Usage: showmappings <start> [<length>]\n";
+
+	if (argc < 2 || ((argv == 2) && !isdigit(*argv[1])))
+		goto help;
+
+	uintptr_t vstart, vend;
+    size_t vlen;
+	pde_t pde;
+    pte_t pte;
+
+    vstart = (uintptr_t)strtol(argv[1], 0, 0);
+    vlen = argc >= 3 ? (size_t)strtol(argv[2], 0, 0) : 1;
+    vend = vstart + vlen;
+
+    vstart = ROUNDDOWN(vstart, PGSIZE);
+
+    for(; vstart <= vend; vstart += PGSIZE) {
+		char permission[10]={'\0'};
+		pde = PDE(kern_pgdir, vstart);
+		if (pde & PTE_P) {
+			if (pde & PTE_PS) {
+				physaddr_t pvaddr = PTE_ADDR(pde) | (PTX(vstart) << PTXSHIFT) | PGOFF(vstart);
+				perm2str(permission, PERM(pde));
+				cprintf("VA: 0x%08x, PA: 0x%08x, PERM-bit: %s\n",
+            		vstart, PTE_ADDR(pde), permission);
+			}
+			else {
+				pte = PTE(kern_pgdir, vstart);
+				if (pte & PTE_P) {
+					perm2str(permission, PERM(pde));
+					cprintf("VA: 0x%08x, PA: 0x%08x, PERM-bit: %s\n",
+            			vstart, PTE_ADDR(pde), permission);
+				}
+			}
+        // pte = pgdir_walk(kern_pgdir, (void*)vstart, 0);
+		// if (pte && *pte & PTE_P) {
+        //     cprintf("VA: 0x%08x, PA: 0x%08x, U-bit: %d, W-bit: %d, PS-bt: %d\n",
+        //     vstart, PTE_ADDR(*pte), !!(*pte & PTE_U), !!(*pte & PTE_W), !!(*pte & PTE_PS));
+        } else
+            cprintf("VA: 0x%08x, PA: No Mapping\n", vstart);
+    }
+    return 0;
+help:
+	cprintf(msg);
+    return 0;
+}
+
+int 
+mon_setperm(int argc, char **argv, struct Trapframe *tf) 
+{
+    static const char *msg = 
+    "Usage: setperm <virtual address> <permission>\n";
+
+    if (argc != 3)
+        goto help;
+    
+    uintptr_t va;
+    uint16_t perm;
+	pde_t pde;
+    pte_t *pte;
+
+    va = (uintptr_t)strtol(argv[1], 0, 0);
+    //perm = (uint16_t)strtol(argv[2], 0, 0);
+	char permission[10]={'\0'};
+	strncpy(permission, argv[2], 9);
+	perm = str2perm(permission);
+	pde = PDE(kern_pgdir, vstart);
+	if (pde & )
+    pte = pgdir_walk(kern_pgdir, (void*)va, 0);
+    if (pte && *pte & PTE_P) {
+        *pte = (*pte & ~0xFFF) | (perm & 0xFFF) | PTE_P;
+    } else {
+        cprintf("There's no such mapping\n");
+    }
+    return 0;
+
+help: 
+    cprintf(msg);
+    return 0;    
+}
+
 /***** Kernel monitor command interpreter *****/
 
 #define WHITESPACE "\t\r\n "
