@@ -219,10 +219,10 @@ mon_showmap(int argc, char **argv, struct Trapframe *tf)
 		pde = PDE(kern_pgdir, vstart);
 		if (pde & PTE_P) {
 			if (pde & PTE_PS) {
-				physaddr_t pvaddr = PTE_ADDR(pde) | (PTX(vstart) << PTXSHIFT) | PGOFF(vstart);
+				physaddr_t pvaddr = PTE_ADDR(pde) | (PTX(vstart) << PTXSHIFT);
 				perm2str(permission, PERM(pde));
 				cprintf("VA: 0x%08x, PA: 0x%08x, PERM-bit: %s\n",
-            		vstart, PTE_ADDR(pde), permission);
+            		vstart, pvaddr, permission);
 			}
 			else {
 				pte = PTE(kern_pgdir, vstart);
@@ -256,7 +256,7 @@ mon_setperm(int argc, char **argv, struct Trapframe *tf)
     
     uintptr_t va;
     uint16_t perm;
-	pde_t pde;
+	pde_t* pde;
     pte_t *pte;
 
     va = (uintptr_t)strtol(argv[1], 0, 0);
@@ -264,14 +264,18 @@ mon_setperm(int argc, char **argv, struct Trapframe *tf)
 	char permission[10]={'\0'};
 	strncpy(permission, argv[2], 9);
 	perm = str2perm(permission);
-	pde = PDE(kern_pgdir, vstart);
-	if (pde & )
-    pte = pgdir_walk(kern_pgdir, (void*)va, 0);
-    if (pte && *pte & PTE_P) {
-        *pte = (*pte & ~0xFFF) | (perm & 0xFFF) | PTE_P;
-    } else {
-        cprintf("There's no such mapping\n");
-    }
+	pde = &kern_pgdir[PDX(va)];
+	if (*pde & PTE_PS){
+		if (*pde & PTE_P)
+			*pde = 
+	} else {
+		pte = pgdir_walk(kern_pgdir, (void*)va, 0);
+		if (pte && *pte & PTE_P) {
+			*pte = (*pte & ~0xFFF) | (perm & 0xFFF) | PTE_P;
+		} else
+			cprintf("No such mapping\n");
+	}
+    
     return 0;
 
 help: 

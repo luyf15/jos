@@ -152,7 +152,7 @@ gdb-nox:
 	$(GDB) -q -n -x .gdbinit
 
 gdb:
-	cgdb -q -n -x .gdbinit
+	$(GDB) -q -n -x .gdbinit
 
 pre-qemu: .gdbinit
 
