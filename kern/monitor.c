@@ -143,15 +143,15 @@ static inline uint32_t
 char2perm(char c) {
 	switch (c)
 	{
-		case 'G': return PTE_G;	//0x100
+		case 'G': return PTE_G;		//0x100
 		case 'S': return PTE_PS;	//0x80
-		case 'D': return PTE_D;	//0x40
-		case 'A': return PTE_A;	//0x20
+		case 'D': return PTE_D;		//0x40
+		case 'A': return PTE_A;		//0x20
 		case 'C': return PTE_PCD;	//0x10
 		case 'T': return PTE_PWT;	//0x8
-		case 'U': return PTE_U;	//0x4
-		case 'W': return PTE_W;	//0x2
-		case 'P': return PTE_P;	//0x1
+		case 'U': return PTE_U;		//0x4
+		case 'W': return PTE_W;		//0x2
+		case 'P': return PTE_P;		//0x1
 		default: return -1;
 	}
 }
@@ -162,17 +162,17 @@ static const char* perm_string = "PWUTCADSG";
 static inline void
 perm2str(char* target, uint32_t perm) {
 	if (perm >= 0x200) {
-		warn("unexcepted page permission!\n");
+		warn("unexcepted permission!\n");
 		perm -= 0x200;
 	}
 
 	int i;
 	for (i = 8; i >= 0; i -= 1) {
 		if (perm & (1 << i)) {
-			target[8 - i] = perm_string[i];
+			*(target + 8 - i) = perm_string[i];
 		}
 		else
-			target[i] = '-';
+			*(target + 8 - i) = '-';
 	}
 }
 
@@ -183,7 +183,7 @@ str2perm(char* str){
 	while(*str)
 		perm |= char2perm(*str++);
 	if(perm < 0)
-		panic("Wrong permission argument\n");
+		panic("Wrong perm-character\n");
 	// setting P bit should be forbidden
 	perm &= ~char2perm('P');
 	return perm;
@@ -192,15 +192,16 @@ str2perm(char* str){
 #define PDE(pgdir,va) (pgdir[(PDX(va))])
 #define PTE_PTR(pgdir,va) (((pte_t*) KADDR(PTE_ADDR(PDE(pgdir,va)))) + PTX(va))
 #define PTE(pgdir,va) (*(PTE_PTR(pgdir,va)))
-#define PERM(entry) (entry && 0xFFF)
+#define PERM(entry) (entry & 0xFFF)
 
 int
 mon_showmap(int argc, char **argv, struct Trapframe *tf)
 {
 	static const char *msg = 
-    "Usage: showmappings <start> [<length>]\n";
+    F_magenta"Usage: showmap <start> [<length>]\n"
+	"Output: VA:[VA], PA:[PA], PERM-bit:[GSDACTUWP]"ATTR_OFF"\n";
 
-	if (argc < 2 || ((argv == 2) && !isdigit(*argv[1])))
+	if (argc < 2 || ((argc == 2) && !isdigit(*argv[1])))
 		goto help;
 
 	uintptr_t vstart, vend;
@@ -213,43 +214,54 @@ mon_showmap(int argc, char **argv, struct Trapframe *tf)
     vend = vstart + vlen;
 
     vstart = ROUNDDOWN(vstart, PGSIZE);
-
-    for(; vstart <= vend; vstart += PGSIZE) {
-		char permission[10]={'\0'};
+	cprintf(ATTR_bold);
+    for(; vstart <= vend; ) {
+		//cprintf("vstart: 0x%08x, vend: 0x%08x\n", vstart, vend);
+		char permission[10];
+		permission[9] = '\0';
 		pde = PDE(kern_pgdir, vstart);
 		if (pde & PTE_P) {
 			if (pde & PTE_PS) {
 				physaddr_t pvaddr = PTE_ADDR(pde) | (PTX(vstart) << PTXSHIFT);
+				//cprintf("pde perm:0x%03x\n",PERM(pde));
 				perm2str(permission, PERM(pde));
-				cprintf("VA: 0x%08x, PA: 0x%08x, PERM-bit: %s\n",
+				cprintf("(PSE_ON) VA: 0x%08x, PA: 0x%08x, PERM: %s\n",
             		vstart, pvaddr, permission);
+				vstart += LPGSIZE;
 			}
 			else {
 				pte = PTE(kern_pgdir, vstart);
 				if (pte & PTE_P) {
-					perm2str(permission, PERM(pde));
-					cprintf("VA: 0x%08x, PA: 0x%08x, PERM-bit: %s\n",
+					cprintf("pte perm:0x%03x\n",PERM(pte));
+					perm2str(permission, PERM(pte));
+					cprintf("(PSE_OFF) VA: 0x%08x, PA: 0x%08x, PERM: %s\n",
             			vstart, PTE_ADDR(pde), permission);
+					vstart += PGSIZE;
 				}
 			}
         // pte = pgdir_walk(kern_pgdir, (void*)vstart, 0);
 		// if (pte && *pte & PTE_P) {
         //     cprintf("VA: 0x%08x, PA: 0x%08x, U-bit: %d, W-bit: %d, PS-bt: %d\n",
         //     vstart, PTE_ADDR(*pte), !!(*pte & PTE_U), !!(*pte & PTE_W), !!(*pte & PTE_PS));
-        } else
+        } else {
             cprintf("VA: 0x%08x, PA: No Mapping\n", vstart);
+			cprintf(ATTR_OFF);
+			return -1;
+		}
     }
+	cprintf(ATTR_OFF);
     return 0;
 help:
 	cprintf(msg);
-    return 0;
+    return -1;
 }
 
 int 
 mon_setperm(int argc, char **argv, struct Trapframe *tf) 
 {
     static const char *msg = 
-    "Usage: setperm <virtual address> <permission>\n";
+    F_magenta"Usage: setperm <virtual address> <permission>\n"
+	"*For PSE-enabled pgd, PTE_PS will be auto-set."ATTR_OFF"\n";
 
     if (argc != 3)
         goto help;
@@ -260,27 +272,124 @@ mon_setperm(int argc, char **argv, struct Trapframe *tf)
     pte_t *pte;
 
     va = (uintptr_t)strtol(argv[1], 0, 0);
-    //perm = (uint16_t)strtol(argv[2], 0, 0);
-	char permission[10]={'\0'};
+    perm = (uint16_t)strtol(argv[2], 0, 0);
+	char permission[10];
+	permission[9]='\0';
 	strncpy(permission, argv[2], 9);
 	perm = str2perm(permission);
+	//cprintf("perm=0x%03x\n", perm);
 	pde = &kern_pgdir[PDX(va)];
 	if (*pde & PTE_PS){
-		if (*pde & PTE_P)
-			*pde = 
+		if (*pde & PTE_P) {
+			*pde = (*pde & ~0xFFF) | perm | PTE_P | PTE_PS;
+			cprintf("New mapping = VA: 0x%08x, PA: 0x%08x, perm: 0x%03x.\n",
+				va, PTE_ADDR(*pde)|(PTX(va) << PTXSHIFT)|PGOFF(va), PERM(*pde));
+		}
+		else {
+			cprintf("No such mapping\n");
+			return -1;
+		}
 	} else {
 		pte = pgdir_walk(kern_pgdir, (void*)va, 0);
 		if (pte && *pte & PTE_P) {
 			*pte = (*pte & ~0xFFF) | (perm & 0xFFF) | PTE_P;
-		} else
+			cprintf("New mapping = VA: 0x%08x, PA: 0x%08x, perm: 0x%03x.\n",
+				va, PTE_ADDR(*pte)|PGOFF(va), PERM(*pte));
+		} else {
 			cprintf("No such mapping\n");
+			return -1;
+		}
 	}
-    
     return 0;
-
 help: 
     cprintf(msg);
-    return 0;    
+    return -1;
+}
+
+int
+mon_dumpmem(int argc, char **argv, struct Trapframe *tf)
+{
+	static const char *msg =
+    F_magenta"Usage: dumpmem [option] <start> <length>\n"
+    "\t-p, --physical\tuse physical address\n"
+	"\t[-v, --virtual]\tuse virtual address(default)"ATTR_OFF"\n";
+
+	int recog = 0;
+	int phys = 0;
+	if (argc == 4) {
+        int i;
+        for (i = 1; i < argc; ++i) {
+            if (!strcmp(argv[i], "-p") || !strcmp(argv[i], "--physical")) {
+				recog = 1;
+                phys = 1;
+                break;
+            }
+			else if (!strcmp(argv[i], "-v") || !strcmp(argv[i], "--virtual")) {
+				recog = 1;
+                break;
+            }
+        }
+        if (!recog)
+            goto help;
+        for (int j = i; j < argc - 1; ++j)
+            argv[j] = argv[j + 1];
+    } else if (argc != 3) {
+        goto help;
+    }
+
+	uint32_t mstart, mend;
+    size_t mlen;
+    
+    mstart = (uint32_t)strtol(argv[1], 0, 0);
+    mlen = (size_t)strtol(argv[2], 0, 0);
+    mend = mstart + mlen;
+
+	cprintf(ATTR_bold);
+    if (phys) {
+        if (mend > (~KERNBASE + 1)) {
+            cprintf("Target memory out of range\n"
+			"Only dump to TOP.\n");
+			mend = ~KERNBASE + 1;
+        }
+        for (; mstart < mend; ++mstart) {
+            cprintf("[PA 0x%08x]: %02x\n", mstart, *(uint8_t*)KADDR(mstart));
+        }
+    } else {
+        uint32_t next;
+        pte_t *pte;
+        while(mstart < mend) {
+			if (PDE(kern_pgdir, mstart) & PTE_PS) {
+				if (PDE(kern_pgdir, mstart) & PTE_P) {
+					next = MIN((uint32_t)PGADDR(PDX(mstart), PTX(mstart) + 1, 0), mend);
+					for (; mstart < next; ++mstart)
+						cprintf("[VA 0x%08x, PA 0x%08x]: %02x\n",
+						 mstart, PTE_ADDR(PDE(kern_pgdir, mstart))|(PTX(mstart) << PTXSHIFT)|PGOFF(mstart), *(uint8_t*)mstart);
+				} else {
+					cprintf("[VA 0x%08x, PA No-mapping]: None\n", mstart);
+
+				}
+			} else {
+				if (!(pte = pgdir_walk(kern_pgdir, (void*)mstart, 0))) {
+					next = MIN((uint32_t)PGADDR(PDX(mstart) + 1, 0, 0), mend);
+					for (; mstart < next; ++mstart)
+						cprintf("[VA 0x%08x, PA No-mapping]: None\n", mstart);
+				} else if (!(*pte & PTE_P)) {
+					next = MIN((uint32_t)PGADDR(PDX(mstart), PTX(mstart) + 1, 0), mend);
+					for (; mstart < next; ++mstart)
+						cprintf("[VA 0x%08x, PA No-mapping]: None\n", mstart);
+				} else {
+					next = MIN((uint32_t)PGADDR(PDX(mstart), PTX(mstart) + 1, 0), mend);
+					for (; mstart < next; ++mstart)
+						cprintf("[VA 0x%08x, PA 0x%08x]: %02x\n", mstart, PTE_ADDR(*pte) | PGOFF(mstart), *(uint8_t*)mstart);
+				}
+			}
+        }
+    }
+	cprintf(ATTR_OFF);
+    return 0;
+help:
+	cprintf(msg);
+	return -1;
 }
 
 /***** Kernel monitor command interpreter *****/
