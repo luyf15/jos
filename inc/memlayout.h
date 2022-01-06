@@ -183,7 +183,8 @@ struct PageInfo {
 	uint32_t flags;
     // the num of free block, used in first fit pm manager
     unsigned int property;
-
+	// the number
+	unsigned int order;
 	// pp_ref is the count of pointers (usually in page table entries)
 	// to this page, for pages allocated using page_alloc.
 	// Pages allocated at boot time using pmap.c's
@@ -194,6 +195,7 @@ struct PageInfo {
 /* Flags describing the status of a page frame */
 #define PG_reserved                 0       // the page descriptor is reserved for kernel or unusable
 #define PG_property                 1       // the member 'property' is valid
+#define PG_kmemcache				2 		// for kmalloc allocator
 
 #define SetPageReserved(page)       set_bit(PG_reserved, &((page)->flags))
 #define ClearPageReserved(page)     clear_bit(PG_reserved, &((page)->flags))
@@ -201,6 +203,9 @@ struct PageInfo {
 #define SetPageProperty(page)       set_bit(PG_property, &((page)->flags))
 #define ClearPageProperty(page)     clear_bit(PG_property, &((page)->flags))
 #define PageProperty(page)          test_bit(PG_property, &((page)->flags))
+#define SetPageKmapcache(page) 		set_bit(PG_kmemcache, &((page)->flags))
+#define ClearPageKmapcache(page) 	clear_bit(PG_kmemcache, &((page)->flags))
+#define PageKmapcache(page) 		test_bit(PG_kmemcache, &((page)->flags))
 
 /* free_area_t - maintains a doubly linked list to record free (unused) pages */
 typedef struct {

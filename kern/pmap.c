@@ -8,6 +8,7 @@
 #include <inc/list.h>
 #include <kern/pmap.h>
 #include <kern/kclock.h>
+#include <kern/kmalloc.h>
 
 // These variables are set by i386_detect_memory()
 size_t npages;			// Amount of physical memory (in pages)
@@ -17,6 +18,7 @@ static size_t npages_basemem;	// Amount of base memory (in pages)
 pde_t *kern_pgdir;		// Kernel's initial page directory
 struct PageInfo *pages;		// Physical page state array
 free_area_t free_area;	// Free list of physical pages
+extern free_area_t buddy_area[MAX_ORDER+1];	// Free list of buddy-allocating memory
 #define page_free_list (free_area.free_list)
 #define nr_free (free_area.nr_free)
 
