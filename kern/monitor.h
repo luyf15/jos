@@ -15,5 +15,14 @@ void monitor(struct Trapframe *tf);
 int mon_help(int argc, char **argv, struct Trapframe *tf);
 int mon_kerninfo(int argc, char **argv, struct Trapframe *tf);
 int mon_backtrace(int argc, char **argv, struct Trapframe *tf);
+int mon_clear(int argc, char **argv, struct Trapframe *tf);
 
+int mon_showmap(int argc, char **argv, struct Trapframe *tf);
+int mon_setperm(int argc, char **argv, struct Trapframe *tf);
+int mon_dumpmem(int argc, char **argv, struct Trapframe *tf);
+
+// Colored Console Test
+int mon_rainbow(int argc, char **argv, struct Trapframe *tf);
+// cpuid in console
+int mon_cpuid(int argc, char **argv, struct Trapframe *tf);
 #endif	// !JOS_KERN_MONITOR_H

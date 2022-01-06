@@ -11,12 +11,11 @@
 #include <kern/env.h>
 #include <kern/trap.h>
 
-
 void
 i386_init(void)
 {
 	extern char edata[], end[];
-
+	//static_assert(0);
 	// Before doing anything else, complete the ELF loading process.
 	// Clear the uninitialized global data (BSS) section of our program.
 	// This ensures that all static/global variables start out zero.
@@ -25,8 +24,30 @@ i386_init(void)
 	// Initialize the console.
 	// Can't call cprintf until after we do this!
 	cons_init();
+	cprintf("\n");
 
-	cprintf("6828 decimal is %o octal!\n", 6828);
+	set_fgcolor(COLOR_RED);
+	cprintf("red\n");
+	set_fgcolor(COLOR_WHITE);
+	cprintf("white\n");
+	highlight(2);
+	set_fgcolor(COLOR_RED);
+	cprintf("red\n");
+	set_fgcolor(COLOR_GREEN);
+	cprintf("green\n");
+	set_fgcolor(COLOR_CYAN);
+	cprintf("cyan\n");
+	set_fgcolor(COLOR_MAGENTA);
+	cprintf("magenta\n");
+	set_fgcolor(COLOR_WHITE);
+	cprintf("white\n");
+
+	print_cpuid(0);
+	cprintf("\33[31;5;46;33;1;42mabcdefg\b\33[0m\n");
+    
+	reset_attr();
+	//unsigned int i = 0x00646c72;
+    //cprintf("H%x Wo%s\n", 57616, &i);
 
 	// Lab 2 memory management initialization functions
 	mem_init();

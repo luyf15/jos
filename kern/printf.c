@@ -35,3 +35,82 @@ cprintf(const char *fmt, ...)
 	return cnt;
 }
 
+//for fg/bg color
+static int fgcolor = -1;
+static int bgcolor = -1;
+static int enable_hli = 0;	//>0:fgcolor highlight; <0:bgcolor highlight
+
+static const char numbers[]={"01234567"};
+
+void
+set_fgcolor(int color)
+{
+	fgcolor = color;
+	if (enable_hli > 0)
+		cprintf("\33[9%cm",numbers[color]);
+	else
+		cprintf("\33[3%cm",numbers[color]);
+}
+
+void
+set_bgcolor(int color)
+{
+	bgcolor = color;
+	if (enable_hli < 0)
+		cprintf("\33[10%cm",numbers[color]);
+	else
+		cprintf("\33[4%cm",numbers[color]);
+}
+
+void
+reset_fgcolor()
+{
+	cprintf(ATTR_OFF);
+	if (bgcolor != -1)
+		cprintf("\33[4%cm",numbers[bgcolor]);
+	fgcolor = -1;
+}
+
+void
+reset_bgcolor()
+{
+	cprintf(ATTR_OFF);
+	if (fgcolor != -1)
+		cprintf("\33[3%cm",numbers[fgcolor]);
+	bgcolor = -1;
+}
+
+void
+lightdown()
+{
+	cprintf(ATTR_OFF);
+	if (fgcolor != -1)
+		cprintf("\33[3%cm",numbers[fgcolor]);
+	if (bgcolor != -1)
+		cprintf("\33[4%cm",numbers[fgcolor]);
+	enable_hli = 0;
+}
+
+void
+highlight(int c)
+{	
+	enable_hli = c;
+}
+
+void
+reset_attr()
+{
+	cprintf(ATTR_OFF);
+	fgcolor = -1;
+	bgcolor = -1;
+}
+
+int
+clear()
+{
+	int cnt = cprintf(SCR_clear);
+	if (!cnt)
+		return -1;
+	else return 0;
+}
+
