@@ -114,7 +114,7 @@ boot_alloc(uint32_t n)
 	if (n > 0)
 		nextfree = ROUNDUP((char *)(nextfree + n), PGSIZE);
 	
-	if (nextfree > (char *)(KERNBASE + 0x400000)){		//only 4MB mapped on bootstrap
+	if (nextfree > (char *)(KERNBASE + 0x800000)){		//only 4MB mapped on bootstrap
 		panic("Out of memory!\n");
 		nextfree = result;	//resume nextfree
 		return NULL;
