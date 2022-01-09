@@ -32,7 +32,9 @@ KERN_SRCFILES :=	kern/entry.S \
 			lib/readline.c \
 			lib/string.c \
 			kern/cpuid.c \
-			kern/malloc.c
+			kern/malloc.c \
+			kern/buddy.c \
+			kern/default_pmm.c
 
 # Only build files if they exist.
 KERN_SRCFILES := $(wildcard $(KERN_SRCFILES))
