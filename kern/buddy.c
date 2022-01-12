@@ -9,6 +9,7 @@
 #include <kern/pmap.h>
 #include <kern/kclock.h>
 #include <inc/memlayout.h>
+#include <inc/atomic.h>
 
 extern struct Page *pages;		// Physical page state array
 extern size_t npages;			// Amount of physical memory (in pages)
@@ -50,7 +51,7 @@ buddy_init_memmap(struct Page *base, size_t n)
 		assert(PageReserved(p));
 		p->flags = p->property = 0;
 		p->zone_num = zone_num;
-		p->pp_ref = 0;
+		set_page_ref(p, 0);
 	}
 	p = zones[zone_num++].mem_base = base;
 	size_t order = MAX_ORDER, order_size = (1 << order);
@@ -58,7 +59,7 @@ buddy_init_memmap(struct Page *base, size_t n)
 		while (n >= order_size) {
 			p->property = order;
 			SetPageProperty(p);
-			list_add(&page_free_list(order), &(p->pp_link));
+			list_add_before(&page_free_list(order), &(p->pp_link));	//avoid access of unmapped high address while bootstrapping
 			n -= order_size, p += order_size;
 			nr_free(order)++;
 		}
@@ -76,7 +77,7 @@ buddy_page_init(void)
 	//pages[_i].pp_link.prev = &(pages[_i].pp_link);
 
     physaddr_t boot_alloc_end = (physaddr_t)PADDR((char*)pages + sizeof(struct Page) * npages);
-    cprintf("phys addr of pages_end:%08x\n",boot_alloc_end);
+    //cprintf("phys addr of pages_end:%08x\n",boot_alloc_end);
 	size_t i;
 
 	//jump over the gap between Base(IO) and Extended
@@ -91,9 +92,9 @@ buddy_page_init(void)
         MARK_USE(i);
     */
     //[1, npages_basemem)
-    buddy_init_memmap(&pages[1], npages_basemem);
+    buddy_init_memmap(&pages[1], npages_basemem - 1);
     //[boot_alloc_end / PGSIZE, npages)
-    buddy_init_memmap((struct Page *)(pages + boot_alloc_end / PGSIZE), npages + 1 - boot_alloc_end / PGSIZE);
+    buddy_init_memmap((struct Page *)(pages + boot_alloc_end / PGSIZE), npages - boot_alloc_end / PGSIZE);
 
     #undef MARK_USE
 }
@@ -138,7 +139,7 @@ buddy_alloc_pages_sub(size_t order, int alloc_flags)
 			}
 			ClearPageProperty(page);
             if (alloc_flags & ALLOC_ZERO)
-				memset(page2kva(page), 0, PGSIZE * (1 << order));
+				memset(page2kva(page), 0, PGSIZE * size);
 			return page;
 		}
 	}
@@ -197,7 +198,7 @@ buddy_free_pages_sub(struct Page *base, size_t order)
 	for (; p != base + (1 << order); p++) {
 		assert(!PageReserved(p) && !PageProperty(p));
 		p->flags = 0;
-		p->pp_ref = 0;
+		set_page_ref(p, 0);
 	}
 	int zone_num = base->zone_num;
 	while (order < MAX_ORDER) {
@@ -278,7 +279,7 @@ buddy_check(void)
 	}
 	assert(total == nr_free_pages());
 
-	struct Page *p0 = alloc_pages(8,ALLOC_ZERO), *buddy = alloc_pages(8,ALLOC_ZERO), *p1;
+	struct Page *p0 = alloc_pages(8,0), *buddy = alloc_pages(8,0), *p1;
 
 	assert(p0 != NULL);
 	assert((page2idx(p0) & 7) == 0);
@@ -296,14 +297,14 @@ buddy_check(void)
 	}
 
 	assert(nr_free_pages() == 0);
-	assert(alloc_page(ALLOC_ZERO) == NULL);
+	assert(alloc_page(0) == NULL);
 	free_pages(p0, 8);
 	assert(nr_free_pages() == 8);
 	assert(PageProperty(p0) && p0->property == 3);
-	assert((p0 = alloc_pages(6,ALLOC_ZERO)) != NULL && !PageProperty(p0)
+	assert((p0 = alloc_pages(6,0)) != NULL && !PageProperty(p0)
 	       && nr_free_pages() == 2);
 
-	assert((p1 = alloc_pages(2,ALLOC_ZERO)) != NULL && p1 == p0 + 6);
+	assert((p1 = alloc_pages(2,0)) != NULL && p1 == p0 + 6);
 	assert(nr_free_pages() == 0);
 
 	free_pages(p0, 3);
@@ -315,8 +316,8 @@ buddy_check(void)
 
 	assert(PageProperty(p0) && p0->property == 3);
 
-	assert((p0 = alloc_pages(6,ALLOC_ZERO)) != NULL);
-	assert((p1 = alloc_pages(2,ALLOC_ZERO)) != NULL);
+	assert((p0 = alloc_pages(6,0)) != NULL);
+	assert((p1 = alloc_pages(2,0)) != NULL);
 	free_pages(p0 + 4, 2);
 	free_pages(p1, 2);
 
@@ -325,8 +326,8 @@ buddy_check(void)
 	free_pages(p0, 4);
 	assert(PageProperty(p0) && p0->property == 3);
 
-	assert((p0 = alloc_pages(8,ALLOC_ZERO)) != NULL);
-	assert(alloc_page(ALLOC_ZERO) == NULL && nr_free_pages() == 0);
+	assert((p0 = alloc_pages(8,0)) != NULL);
+	assert(alloc_page(0) == NULL && nr_free_pages() == 0);
 
 	for (i = 0; i <= MAX_ORDER; i++) {
 		page_free_list(i) = free_lists_store[i];

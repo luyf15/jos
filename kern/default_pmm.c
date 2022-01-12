@@ -9,6 +9,7 @@
 #include <kern/kclock.h>
 #include <inc/memlayout.h>
 #include <kern/default_pmm.h>
+#include <inc/atomic.h>
 
 extern struct Page *pages;		// Physical page state array
 extern size_t npages;			// Amount of physical memory (in pages)
@@ -46,7 +47,7 @@ default_page_init(void)
 	//     in physical memory?  Which pages are already in use for
 	//     page tables and other data structures?
 #define MARK_FREE(_i) do {\
-    pages[_i].pp_ref = 0;\
+    set_page_ref(&pages[_i], 0);\
     list_add_before(&page_free_list, &(pages[_i].pp_link));\
 	pages[_i].flags = 0x2;\
 	pages[_i].property = 0;\
@@ -54,7 +55,7 @@ default_page_init(void)
 	} while(0)
 
 #define MARK_USE(_i) do {\
-    pages[_i].pp_ref = 0;\
+    set_page_ref(&pages[_i], 0);\
     SetPageReserved(&pages[_i]);\
     pages[_i].pp_link.next = &(pages[_i].pp_link);\
     pages[_i].pp_link.prev = &(pages[_i].pp_link);\
@@ -142,7 +143,7 @@ default_free_pages(struct Page *base, size_t n)
 	// Hint: You may want to panic if pp->pp_ref is nonzero or
 	// pp->pp_link is not NULL.
 	assert(PageReserved(base));
-	assert(!base->pp_ref);
+	assert(!page_ref(base));
 	assert(n > 0);
 	list_entry_t *le = &page_free_list;
 	struct Page *p;

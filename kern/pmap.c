@@ -79,6 +79,7 @@ static void check_page_installed_pgdir(void);
 static void
 init_pmm_manager(void)
 {
+	//pmm_manager = &default_pmm_manager;
 	pmm_manager = &buddy_pmm_manager;
 	cprintf("memory managment: %s\n", pmm_manager->name);
 	pmm_manager->init();
@@ -128,7 +129,7 @@ free_pages(struct Page *base, size_t n)
 void
 page_decref(struct Page* pp)
 {
-	if (--pp->pp_ref == 0)
+	if (page_ref_dec(pp) == 0)
 		free_page(pp);
 }
 
@@ -144,7 +145,7 @@ static void
 check_pmm(void)
 {
 	pmm_manager->check();
-	cprintf("check_alloc_page() succeeded!\n");
+	cprintf("check_physical_memory_manager() succeeded!\n");
 }
 
 
@@ -356,7 +357,7 @@ pgdir_walk(pde_t *pgdir, const void *va, int create)
 		if (!create || !(pi = alloc_page(ALLOC_ZERO)))	//won't create or fail to allocate a pagetable
 			return NULL;
 		*pde = page2pa(pi) | PTE_P | PTE_W | PTE_U | PTE_PWT | PTE_PCD | PTE_G;
-		pi->pp_ref++;
+		set_page_ref(pi, 1);
 	}
 	pgt = KADDR(PTE_ADDR(*pde));	//kva of the page table
 	return (pgt + PTX(va));
@@ -444,7 +445,7 @@ page_insert(pde_t *pgdir, struct Page *pp, void *va, int perm)
 	pte_t *pte;
 	if (!(pte = pgdir_walk(pgdir, va, 1)))	//create on demand
 		return -E_NO_MEM;
-	pp->pp_ref++;	//inc ref_count beforehand to avoid 're-inserted' corner case
+	page_ref_inc(pp);	//inc ref_count beforehand to avoid 're-inserted' corner case
 	if (*pte & PTE_P)
 		page_remove(pgdir, va);		//delete previous page mapping
 	*pte = page2pa(pp) | PTE_P | perm;
@@ -784,22 +785,22 @@ check_page_installed_pgdir(void)
 	memset(page2kva(pp1), 1, PGSIZE);
 	memset(page2kva(pp2), 2, PGSIZE);
 	page_insert(kern_pgdir, pp1, (void*) PGSIZE, PTE_W);
-	assert(pp1->pp_ref == 1);
+	assert(page_ref(pp1) == 1);
 	assert(*(uint32_t *)PGSIZE == 0x01010101U);
 	page_insert(kern_pgdir, pp2, (void*) PGSIZE, PTE_W);
 	assert(*(uint32_t *)PGSIZE == 0x02020202U);
-	assert(pp2->pp_ref == 1);
-	assert(pp1->pp_ref == 0);
+	assert(page_ref(pp2) == 1);
+	assert(page_ref(pp1) == 0);
 	*(uint32_t *)PGSIZE = 0x03030303U;
 	assert(*(uint32_t *)page2kva(pp2) == 0x03030303U);
 	page_remove(kern_pgdir, (void*) PGSIZE);
-	assert(pp2->pp_ref == 0);
+	assert(page_ref(pp2) == 0);
 
 	// forcibly take pp0 back
 	assert(PTE_ADDR(kern_pgdir[0]) == page2pa(pp0));
 	kern_pgdir[0] = 0;
-	assert(pp0->pp_ref == 1);
-	pp0->pp_ref = 0;
+	assert(page_ref(pp0) == 1);
+	set_page_ref(pp0, 0);
 
 	// free the pages we took
 	free_page(pp0);

@@ -112,6 +112,26 @@ static inline struct Page *pte2page(pte_t pte)
 	return pa2page(PTE_ADDR(pte));
 }
 
+static inline int page_ref(struct Page *page)
+{
+	return atomic_read(&(page->pp_ref));
+}
+
+static inline void set_page_ref(struct Page *page, int val)
+{
+	atomic_set(&(page->pp_ref), val);
+}
+
+static inline int page_ref_inc(struct Page *page)
+{
+	return atomic_add_return(&(page->pp_ref), 1);
+}
+
+static inline int page_ref_dec(struct Page *page)
+{
+	return atomic_sub_return(&(page->pp_ref), 1);
+}
+
 pte_t *pgdir_walk(pde_t *pgdir, const void *va, int create);
 
 #endif /* !JOS_KERN_PMAP_H */

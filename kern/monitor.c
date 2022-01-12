@@ -246,14 +246,14 @@ mon_showmap(int argc, char **argv, struct Trapframe *tf)
         } else {
             cprintf("VA: 0x%08x, PA: No Mapping\n", vstart);
 			cprintf(ATTR_OFF);
-			return -1;
+			return 1;
 		}
     }
 	cprintf(ATTR_OFF);
     return 0;
 help:
 	cprintf(msg);
-    return -1;
+    return 1;
 }
 
 int 
@@ -287,7 +287,7 @@ mon_setperm(int argc, char **argv, struct Trapframe *tf)
 		}
 		else {
 			cprintf("No such mapping\n");
-			return -1;
+			return 1;
 		}
 	} else {
 		pte = pgdir_walk(kern_pgdir, (void*)va, 0);
@@ -297,13 +297,13 @@ mon_setperm(int argc, char **argv, struct Trapframe *tf)
 				va, PTE_ADDR(*pte)|PGOFF(va), PERM(*pte));
 		} else {
 			cprintf("No such mapping\n");
-			return -1;
+			return 1;
 		}
 	}
     return 0;
 help: 
     cprintf(msg);
-    return -1;
+    return 1;
 }
 
 int
@@ -389,7 +389,7 @@ mon_dumpmem(int argc, char **argv, struct Trapframe *tf)
     return 0;
 help:
 	cprintf(msg);
-	return -1;
+	return 1;
 }
 
 /***** Kernel monitor command interpreter *****/
