@@ -254,6 +254,8 @@ mem_init(void)
 	// LAB 3: Your code here.
 	envs = (struct Env *)boot_alloc(sizeof(struct Env) * NENV);
 	memset(envs, 0, sizeof(struct Env) * NENV);
+	cprintf("envs start at: %.8x\n", envs);
+	cprintf("envs end at: %.8x\n", ((char*)envs) + (sizeof(struct Env) * NENV));
 
 	//////////////////////////////////////////////////////////////////////
 	// Now that we've allocated the initial kernel data structures, we set
