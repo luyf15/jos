@@ -81,6 +81,7 @@ void	user_mem_assert(struct Env *env, const void *va, size_t len, int perm);
 static inline ppn_t page2ppn(struct Page *page)
 {
 	return page - pages;
+}
 
 static inline physaddr_t
 page2pa(struct Page *pp)
