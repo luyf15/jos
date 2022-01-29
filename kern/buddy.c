@@ -76,7 +76,8 @@ buddy_page_init(void)
     //pages[_i].pp_link.next = &(pages[_i].pp_link);
 	//pages[_i].pp_link.prev = &(pages[_i].pp_link);
 
-    physaddr_t boot_alloc_end = (physaddr_t)PADDR((char*)pages + sizeof(struct Page) * npages);
+    physaddr_t boot_alloc_end = (physaddr_t)PADDR(boot_alloc(0));
+	cprintf("[DEBUG]boot alloc end=%.8x\n", boot_alloc_end);
 	size_t i;
 
 	//jump over the gap between Base(IO) and Extended

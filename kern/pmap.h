@@ -60,7 +60,7 @@ enum {
 };
 
 void	mem_init(void);
-
+void *boot_alloc(uint32_t n);
 struct Page *alloc_pages(size_t n, int alloc_flags);
 void	free_pages(struct Page *base, size_t n);
 #define alloc_page(alloc_flag) alloc_pages(1, alloc_flag)

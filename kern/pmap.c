@@ -163,7 +163,7 @@ check_pmm(void)
 // If we're out of memory, boot_alloc should panic.
 // This function may ONLY be used during initialization,
 // before the page_free_list list has been set up.
-static void *
+void *
 boot_alloc(uint32_t n)
 {
 	static char *nextfree;	// virtual address of next byte of free memory
@@ -603,7 +603,7 @@ check_kern_pgdir(void)
 	pgdir = kern_pgdir;
 
 	// check pages array
-	n = ROUNDUP(npages*sizeof(struct Page), PGSIZE);
+	n = ROUNDUP(npages * sizeof(struct Page), PGSIZE);
 	for (i = 0; i < n; i += PGSIZE)
 		assert(check_va2pa(pgdir, UPAGES + i) == PADDR(pages) + i);
 
