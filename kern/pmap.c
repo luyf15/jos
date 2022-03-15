@@ -21,11 +21,6 @@ pde_t *kern_pgdir;		// Kernel's initial page directory
 struct Page *pages;		// Physical page state array
 const struct pmm_manager *pmm_manager;	// current physical memory manager
 
-free_area_t free_area;	// Free list of physical pages
-#define page_free_list (free_area.free_list)
-#define nr_free (free_area.nr_free)
-
-
 extern unsigned int DFeInfo2;
 bool pae_support, pse_support;
 // --------------------------------------------------------------
@@ -80,8 +75,8 @@ static void check_page_installed_pgdir(void);
 static void
 init_pmm_manager(void)
 {
-	//pmm_manager = &default_pmm_manager;
-	pmm_manager = &buddy_pmm_manager;
+	pmm_manager = &default_pmm_manager;
+	// pmm_manager = &buddy_pmm_manager;
 	cprintf("memory managment: %s\n", pmm_manager->name);
 	pmm_manager->init();
 }
@@ -146,7 +141,7 @@ static void
 check_pmm(void)
 {
 	pmm_manager->check();
-	cprintf("check_physical_memory_manager() succeeded!\n");
+	cprintf("check_memory_manager():%s succeeded!\n",pmm_manager->name);
 }
 
 
