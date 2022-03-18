@@ -38,7 +38,7 @@ cprintf(const char *fmt, ...)
 //for fg/bg color
 static int fgcolor = -1;
 static int bgcolor = -1;
-static int enable_hli = 0;
+static int enable_hli = 0;	//>0:fgcolor highlight; <0:bgcolor highlight
 
 static const char numbers[]={"01234567"};
 
@@ -101,6 +101,8 @@ void
 reset_attr()
 {
 	cprintf(ATTR_OFF);
+	fgcolor = -1;
+	bgcolor = -1;
 }
 
 int
@@ -111,3 +113,4 @@ clear()
 		return -1;
 	else return 0;
 }
+

@@ -1,0 +1,12 @@
+﻿Entry,Base Virtual Address,Points to (logically)
+1023," 0xFFC00000",Page table for top 4MB of phys memory
+1022," 0xFF800000",Page table for top 8~4MB of phys memory
+...,,
+960," 0xF0000000",Page table for bottom 4MB of phys memory
+959,0xEFC00000,Page table that contains kernel stack
+...,,
+957,0xEFC40000,Virtual page directory
+956,0xEFC00000,Page table mapping `pages` to user space
+...,,
+1,0x00400000,\
+0,0x00000000,\

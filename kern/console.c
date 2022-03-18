@@ -52,7 +52,19 @@ serial_proc_data(void)
 {
 	if (!(inb(COM1+COM_LSR) & COM_LSR_DATA))
 		return -1;
+	/*
+	int c = inb(COM1+COM_RX);
+	switch (c){
+		case '\r':
+			return '\n';
+		case 0x7f:
+			return '\b';
+		default:
+			return c;
+	}
+	*/
 	return inb(COM1+COM_RX);
+
 }
 
 void
@@ -71,7 +83,6 @@ serial_putc(int c)
 	     !(inb(COM1 + COM_LSR) & COM_LSR_TXRDY) && i < 12800;
 	     i++)
 		delay();
-
 	outb(COM1 + COM_TX, c);
 }
 
@@ -170,7 +181,7 @@ cga_putc_legacy(int c)
 	case '\b':
 		if (crt_pos > 0) {
 			crt_pos--;
-			// make easier to implement readline
+			// coincide with the behavior of '\b' in serial
 			// crt_buf[crt_pos] = (c & ~0xff) | ' ';
 		}
 		break;
@@ -192,11 +203,10 @@ cga_putc_legacy(int c)
 		break;
 	}
 
-	// the purpose of this
-	// Scorll down a single row to refresh newer contents when the console is full
+	// the purpose of this snippet
+	// Scorll down a single row for newer contents when the console is full
 	if (crt_pos >= CRT_SIZE) {
 		int i;
-
 		memmove(crt_buf, crt_buf + CRT_COLS, (CRT_SIZE - CRT_COLS) * sizeof(uint16_t));
 		for (i = CRT_SIZE - CRT_COLS; i < CRT_SIZE; i++)
 			crt_buf[i] = 0x0700 | ' ';
@@ -208,23 +218,6 @@ cga_putc_legacy(int c)
 	outb(addr_6845 + 1, crt_pos >> 8);
 	outb(addr_6845, 15);
 	outb(addr_6845 + 1, crt_pos);
-}
-
-// number in the esc_seq
-static int
-isdigit(int c)
-{
-	return (c >= '0' && c <='9');
-}
-
-//unique atoi() for ansi_esc_handler
-static int
-atoi(const char *s)
-{
-	int res = 0;
-	for (int i = 0; isdigit(s[i]);i++)
-		res = res * 10 + (s[i] - '0');
-	return res;
 }
 
 // only handle the color attributes
@@ -553,7 +546,7 @@ cons_getc(void)
 	serial_intr();
 	kbd_intr();
 
-	// grab the next character from the input buffer.
+	// grab the next charinacter from the input buffer.
 	if (cons.rpos != cons.wpos) {
 		c = cons.buf[cons.rpos++];
 		if (cons.rpos == CONSBUFSIZE)
@@ -567,9 +560,9 @@ cons_getc(void)
 static void
 cons_putc(int c)
 {
-	serial_putc(c);
-	lpt_putc(c);
-	cga_putc(c);
+	serial_putc(c);    //to the serial == stdio (√)
+	lpt_putc(c);       //to the parallel == stdio (√)
+ 	cga_putc(c);       //to the CGA/VGA display == QEMU console (x)
 }
 
 // initialize the console devices

@@ -140,7 +140,7 @@ include boot/Makefrag
 include kern/Makefrag
 
 
-QEMUOPTS = -drive file=$(OBJDIR)/kern/kernel.img,index=0,media=disk,format=raw -serial mon:stdio -gdb tcp::$(GDBPORT)
+QEMUOPTS = -drive file=$(OBJDIR)/kern/kernel.img,index=0,media=disk,format=raw -gdb tcp::$(GDBPORT) -m 512m
 QEMUOPTS += $(shell if $(QEMU) -nographic -help | grep -q '^-D '; then echo '-D qemu.log'; fi)
 IMAGES = $(OBJDIR)/kern/kernel.img
 QEMUOPTS += $(QEMUEXTRA)
@@ -148,31 +148,43 @@ QEMUOPTS += $(QEMUEXTRA)
 .gdbinit: .gdbinit.tmpl
 	sed "s/localhost:1234/localhost:$(GDBPORT)/" < $^ > $@
 
+gdb-nox:
+	$(GDB) -q -n -x .gdbinit
+
 gdb:
-	$(GDB) -n -x .gdbinit
+	$(GDB) -q -n -x .gdbinit
 
 pre-qemu: .gdbinit
 
 qemu: $(IMAGES) pre-qemu
-	$(QEMU) $(QEMUOPTS)
+	$(QEMU) $(QEMUOPTS) -serial stdio -parallel null
+
+qemu-mon: $(IMAGES) pre-qemu
+	$(QEMU) $(QEMUOPTS) -serial null -monitor stdio
 
 qemu-nox: $(IMAGES) pre-qemu
 	@echo "***"
 	@echo "*** Use Ctrl-a x to exit qemu"
 	@echo "***"
-	$(QEMU) -nographic $(QEMUOPTS)
+	$(QEMU) -nographic $(QEMUOPTS) -serial mon:stdio
 
 qemu-gdb: $(IMAGES) pre-qemu
 	@echo "***"
 	@echo "*** Now run 'make gdb'." 1>&2
 	@echo "***"
-	$(QEMU) $(QEMUOPTS) -S
+	$(QEMU) $(QEMUOPTS) -S -serial null -parallel stdio
 
 qemu-nox-gdb: $(IMAGES) pre-qemu
 	@echo "***"
 	@echo "*** Now run 'make gdb'." 1>&2
 	@echo "***"
-	$(QEMU) -nographic $(QEMUOPTS) -S
+	$(QEMU) -nographic $(QEMUOPTS) -S -serial mon:stdio
+
+qemu-mon-gdb: $(IMAGES) pre-qemu
+	@echo "***"
+	@echo "*** Now run 'make gdb'." 1>&2
+	@echo "***"
+	$(QEMU) $(QEMUOPTS) -S -serial null -parallel null -monitor stdio
 
 print-qemu:
 	@echo $(QEMU)
