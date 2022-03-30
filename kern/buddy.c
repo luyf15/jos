@@ -53,14 +53,20 @@ buddy_init_memmap(struct Page *base, size_t n)
 		p->zone_num = zone_num;
 		set_page_ref(p, 0);
 	}
-	p = zones[zone_num++].mem_base = base;
+	zones[zone_num++].mem_base = base;
 	size_t order = MAX_ORDER, order_size = (1 << order);
+
+	if (n <= order_size)
+		p = base;
+	else
+		p = base + n - 1 - order_size;
+
 	while (n != 0) {
 		while (n >= order_size) {
 			p->property = order;
 			SetPageProperty(p);
-			list_add_before(&page_free_list(order), &(p->pp_link));	//avoid access of unmapped high address while bootstrapping
-			n -= order_size, p += order_size;
+			list_add(&page_free_list(order), &(p->pp_link));	//avoid access of unmapped high address while bootstrapping
+			n -= order_size, p -= order_size;
 			nr_free(order)++;
 		}
 		order--;
