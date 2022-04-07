@@ -109,7 +109,6 @@ envid2env(envid_t envid, struct Env **env_store, bool checkperm)
 // Make sure the environments are in the free list in the same order
 // they are in the envs array (i.e., so that the first call to
 // env_alloc() returns envs[0]).
-//
 void
 env_init(void)
 {
@@ -259,10 +258,6 @@ env_alloc(struct Env **newenv_store, envid_t parent_id)
 static void
 region_alloc(struct Env *e, void *va, size_t len)
 {
-	// Watch out for corner-cases
-	if ((uintptr_t)va >= UTOP)
-	    panic("region_alloc(1): Unavailable virtual address for user environment");
-
 	uintptr_t vstart, vend;
     struct Page *p;
     int err;
@@ -272,6 +267,10 @@ region_alloc(struct Env *e, void *va, size_t len)
 	//  You should round va down, and round (va + len) up.
     vstart = ROUNDDOWN((uintptr_t)va, PGSIZE);
     vend = ROUNDUP((uintptr_t)va + len, PGSIZE);
+	
+	// Watch out for corner-cases
+	if ((uintptr_t)vend >= UTOP)
+	    panic("region_alloc(1): Unavailable virtual address for user environment");
 
     for (; vstart < vend; vstart += PGSIZE) {
         if (!(p = alloc_page(ALLOC_ZERO)))
@@ -503,4 +502,3 @@ env_run(struct Env *e)
 	env_pop_tf(&curenv->env_tf);
 	// panic("env_run not yet implemented");
 }
-
