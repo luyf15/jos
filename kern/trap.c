@@ -81,7 +81,6 @@ trap_init(void)
 	extern struct Segdesc gdt[];
 
 	// LAB 3: Your code here.
-	extern uintptr_t __handlers[];
     for (int i = 0; i < 32; ++i)    
 		SETGATE(idt[i], 0, GD_KT, handlers[i], 0);
 	SETGATE(idt[T_BRKPT], 0, GD_KT, handlers[T_BRKPT], 3);
@@ -157,12 +156,6 @@ print_regs(struct PushRegs *regs)
 	cprintf("  edx  0x%08x\n", regs->reg_edx);
 	cprintf("  ecx  0x%08x\n", regs->reg_ecx);
 	cprintf("  eax  0x%08x\n", regs->reg_eax);
-}
-
-inline void
-breakpoint_handler(struct Trapframe *tf)
-{
-	monitor(tf);
 }
 
 static void
@@ -255,4 +248,11 @@ page_fault_handler(struct Trapframe *tf)
 		curenv->env_id, fault_va, tf->tf_eip);
 	print_trapframe(tf);
 	env_destroy(curenv);
+}
+
+
+inline void
+breakpoint_handler(struct Trapframe *tf)
+{
+	monitor(tf);
 }

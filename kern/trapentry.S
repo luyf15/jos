@@ -69,5 +69,7 @@ _alltraps:
 	# pass a pointer to the trap frame for function trap  
 	pushl %esp
 	call trap
+spin_trap:
+	jmp spin_trap
 
 .data
