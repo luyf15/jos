@@ -46,10 +46,28 @@
 /*
  * Lab 3: Your code here for generating entry points for the different traps.
  */
+#define TH(n) TRAPHANDLER_NOEC(handler##n, n)
+#define THE(n) TRAPHANDLER(handler##n, n)
 
-
+#include <kern/trapvector.inc>
 
 /*
  * Lab 3: Your code here for _alltraps
  */
+_alltraps:
+	# push registers to build a trap frame 
+	# therefore make the stack look like a struct trapframe
+	pushl %ds
+	pushl %es
+	pushal
 
+	# load GD_KD into %ds, %es
+	movw $(GD_KD), %ax
+	movw %ax, %ds
+	movw %ax, %es
+
+	# pass a pointer to the trap frame for function trap  
+	pushl %esp
+	call trap
+
+.data
