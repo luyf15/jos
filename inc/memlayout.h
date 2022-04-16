@@ -105,7 +105,7 @@
 #define MMIOLIM		(KSTACKTOP - PTSIZE)
 #define MMIOBASE	(MMIOLIM - PTSIZE)
 
-#define ULIM		(MMIOBASE)
+#define ULIM		(MMIOBASE)	//0XDF800000
 
 /*
  * User read-only mappings! Anything below here til UTOP are readonly to user.
@@ -123,7 +123,7 @@
  * Top of user VM. User can manipulate VA from UTOP-1 and down!
  */
 
-// Top of user-accessible VM
+// Top of user-accessible VM, 0xDEC00000
 #define UTOP		UENVS
 // Top of one-page user exception stack
 #define UXSTACKTOP	UTOP

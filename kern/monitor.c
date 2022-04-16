@@ -7,6 +7,7 @@
 #include <inc/assert.h>
 #include <inc/x86.h>
 
+#include <kern/env.h>
 #include <kern/pmap.h>
 #include <kern/console.h>
 #include <kern/monitor.h>
@@ -15,6 +16,7 @@
 
 #define CMDBUF_SIZE	80	// enough for one VGA text line
 extern pde_t *kern_pgdir;
+extern struct Env *curenv;
 
 struct Command {
 	const char *name;
@@ -33,10 +35,10 @@ static struct Command commands[] = {
 	{ "showmap", "Show the mappings between given virtual memory range", mon_showmap },
     { "setperm", "Set the permission bits of a given mapping", mon_setperm },
     { "dumpmem", "Dump the content of a given virtual/physical memory range", mon_dumpmem},
-	{ "step", "", mon_step},
-	{ "s", "", mon_step},
-	{ "continue", "", mon_continue},
-	{ "c", "", mon_continue},
+	{ "step", "Single-steppedly execute the following instruction", mon_step},
+	{ "s", "Single-steppedly execute the following instruction", mon_step},
+	{ "continue", "continue execution", mon_continue},
+	{ "c", "continue execution", mon_continue},
 };
 
 /***** Implementations of basic kernel monitor commands *****/
@@ -87,14 +89,14 @@ mon_backtrace(int argc, char **argv, struct Trapframe *tf)
 		uint32_t eip = (uint32_t)*((int *)ebp + 1);
 		cprintf("\nebp %x  eip %x  args", ebp, eip);
 		int *args = (int *)ebp + 2;
-		for (int i=0;i<4;i++)
-			cprintf(" %08.x ",args[i]);
+		for (int i = 0; i < 2; i++)
+			cprintf(" %08.x ", args[i]);
 		cprintf("\n");
 		struct Eipdebuginfo info;
-		debuginfo_eip(eip,&info);
+		debuginfo_eip(eip, &info);
 		cprintf("\t%s:%d: %.*s+%d\n",
-			info.eip_file,info.eip_line,
-			info.eip_fn_namelen,info.eip_fn_name,eip-info.eip_fn_addr);
+			info.eip_file, info.eip_line,
+			info.eip_fn_namelen, info.eip_fn_name, eip-info.eip_fn_addr);
 		ebp = *(uint32_t *)ebp;
 		//count++ ;
 	}
@@ -222,9 +224,9 @@ mon_showmap(int argc, char **argv, struct Trapframe *tf)
 	cprintf(ATTR_bold);
     for(; vstart <= vend; ) {
 		//cprintf("vstart: 0x%08x, vend: 0x%08x\n", vstart, vend);
-		char permission[10];
-		permission[9] = '\0';
-		pde = PDE(kern_pgdir, vstart);
+		char permission[10] = { 0 };
+		// permission[9] = '\0';
+		pde = PDE((curenv?curenv->env_pgdir:kern_pgdir), vstart);
 		if (pde & PTE_P) {
 			if (pde & PTE_PS) {
 				physaddr_t pvaddr = PTE_ADDR(pde) | (PTX(vstart) << PTXSHIFT);
@@ -235,9 +237,9 @@ mon_showmap(int argc, char **argv, struct Trapframe *tf)
 				vstart += LPGSIZE;
 			}
 			else {
-				pte = PTE(kern_pgdir, vstart);
+				pte = PTE((curenv?curenv->env_pgdir:kern_pgdir), vstart);
 				if (pte & PTE_P) {
-					cprintf("pte perm:0x%03x\n",PERM(pte));
+					cprintf("pte perm:0x%03x\n", PERM(pte));
 					perm2str(permission, PERM(pte));
 					cprintf("(PSE_OFF) VA: 0x%08x, PA: 0x%08x, PERM: %s\n",
             			vstart, PTE_ADDR(pde), permission);
@@ -283,7 +285,7 @@ mon_setperm(int argc, char **argv, struct Trapframe *tf)
 	strncpy(permission, argv[2], 9);
 	perm = str2perm(permission);
 	//cprintf("perm=0x%03x\n", perm);
-	pde = &kern_pgdir[PDX(va)];
+	pde = curenv ? &curenv->env_pgdir[PDX(va)] : &kern_pgdir[PDX(va)];
 	if (*pde & PTE_PS){
 		if (*pde & PTE_P) {
 			*pde = (*pde & ~0xFFF) | perm | PTE_P | PTE_PS;
@@ -295,7 +297,7 @@ mon_setperm(int argc, char **argv, struct Trapframe *tf)
 			return 1;
 		}
 	} else {
-		pte = pgdir_walk(kern_pgdir, (void*)va, 0);
+		pte = pgdir_walk((curenv?curenv->env_pgdir:kern_pgdir), (void*)va, 0);
 		if (pte && *pte & PTE_P) {
 			*pte = (*pte & ~0xFFF) | (perm & 0xFFF) | PTE_P;
 			cprintf("New mapping = VA: 0x%08x, PA: 0x%08x, perm: 0x%03x.\n",
@@ -363,18 +365,19 @@ mon_dumpmem(int argc, char **argv, struct Trapframe *tf)
         uint32_t next;
         pte_t *pte;
         while(mstart < mend) {
-			if (PDE(kern_pgdir, mstart) & PTE_PS) {
-				if (PDE(kern_pgdir, mstart) & PTE_P) {
+			if (PDE((curenv?curenv->env_pgdir:kern_pgdir), mstart) & PTE_PS) {
+				if (PDE((curenv?curenv->env_pgdir:kern_pgdir), mstart) & PTE_P) {
 					next = MIN((uint32_t)PGADDR(PDX(mstart), PTX(mstart) + 1, 0), mend);
 					for (; mstart < next; ++mstart)
 						cprintf("[VA 0x%08x, PA 0x%08x]: %02x\n",
-						 mstart, PTE_ADDR(PDE(kern_pgdir, mstart))|(PTX(mstart) << PTXSHIFT)|PGOFF(mstart), *(uint8_t*)mstart);
+						 mstart, PTE_ADDR(PDE((curenv?curenv->env_pgdir:kern_pgdir), mstart))
+						 |(PTX(mstart) << PTXSHIFT)|PGOFF(mstart), *(uint8_t*)mstart);
 				} else {
 					cprintf("[VA 0x%08x, PA No-mapping]: None\n", mstart);
 
 				}
 			} else {
-				if (!(pte = pgdir_walk(kern_pgdir, (void*)mstart, 0))) {
+				if (!(pte = pgdir_walk((curenv?curenv->env_pgdir:kern_pgdir), (void*)mstart, 0))) {
 					next = MIN((uint32_t)PGADDR(PDX(mstart) + 1, 0, 0), mend);
 					for (; mstart < next; ++mstart)
 						cprintf("[VA 0x%08x, PA No-mapping]: None\n", mstart);
@@ -400,6 +403,7 @@ help:
 int
 mon_step(int argc, char **argv, struct Trapframe *tf)
 {
+	// if not user-source bp/db interrupt, do nothing
 	if (!(tf && (tf->tf_trapno == T_DEBUG || tf->tf_trapno == T_BRKPT) && 
           ((tf->tf_cs & 3) == 3)))
         return 0;
@@ -410,6 +414,7 @@ mon_step(int argc, char **argv, struct Trapframe *tf)
 int
 mon_continue(int argc, char **argv, struct Trapframe *tf)
 {
+	// if not user-source bp/db interrupt, do nothing
 	if (!(tf && (tf->tf_trapno == T_DEBUG || tf->tf_trapno == T_BRKPT) && 
           ((tf->tf_cs & 3) == 3)))
         return 0;

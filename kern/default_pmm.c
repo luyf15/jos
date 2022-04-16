@@ -11,7 +11,8 @@
 #include <kern/default_pmm.h>
 #include <inc/atomic.h>
 
-extern struct Page *pages;		// Physical page state array
+
+extern physaddr_t boot_alloc_end;		// the top of initialized kernel
 extern size_t npages;			// Amount of physical memory (in pages)
 extern size_t npages_basemem;	// Amount of base memory (in pages)
 
@@ -61,7 +62,6 @@ default_page_init(void)
     pages[_i].pp_link.prev = &(pages[_i].pp_link);\
 	} while(0)
 
-    physaddr_t boot_alloc_end = (physaddr_t)PADDR((char*)pages + sizeof(struct Page) * npages);
 	size_t i;
 
 	//jump over the gap between Base(IO) and Extended
@@ -128,7 +128,7 @@ default_alloc_pages(size_t n, int alloc_flags)
 			if (alloc_flags & ALLOC_ZERO)
 				memset(page2kva(p), 0, PGSIZE*n);		//init pages from kaddr(target)
 			return p;
-      }
+    	}
     }
     return NULL;
 }

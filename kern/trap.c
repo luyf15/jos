@@ -84,6 +84,7 @@ trap_init(void)
     for (int i = 0; i < 32; ++i)    
 		SETGATE(idt[i], 0, GD_KT, handlers[i], 0);
 	SETGATE(idt[T_BRKPT], 0, GD_KT, handlers[T_BRKPT], 3);
+	SETGATE(idt[T_DEBUG], 0, GD_KT, handlers[T_BRKPT], 3);
 	SETGATE(idt[T_SYSCALL], 0, GD_KT, handlers[T_SYSCALL], 3);
 	// Per-CPU setup 
 	trap_init_percpu();
@@ -166,14 +167,22 @@ trap_dispatch(struct Trapframe *tf)
 	switch (tf->tf_trapno){
 		case T_PGFLT:
 			page_fault_handler(tf);
-			break;
+			return ;
 		case T_DEBUG:
 		case T_BRKPT:
 			breakpoint_handler(tf);
-			break;
-		case T_SYSCALL:
-			;
-			break;
+			return ;
+		case T_SYSCALL:{
+			// eax, edx, ecx, ebx, edi, esi
+			struct PushRegs *r = &tf->tf_regs;
+			r->reg_eax = syscall(r->reg_eax,
+							r->reg_edx,
+							r->reg_ecx,
+							r->reg_ebx,
+							r->reg_edi,
+							r->reg_esi);
+			return ;
+		}
 		default:
 			// cprintf("No.%d interrupt imcomplete.\n",tf->tf_trapno);
 			break;
@@ -238,8 +247,8 @@ page_fault_handler(struct Trapframe *tf)
 	// Handle kernel-mode page faults.
 
 	// LAB 3: Your code here.
-	// if(!(tf->tf_cs & 0x3))
-		// panic("trap_handler: Kernel page fault");
+	if(!(tf->tf_cs & 0x3))
+		panic("trap_handler: Kernel page fault");
 	// We've already handled kernel-mode exceptions, so if we get here,
 	// the page fault happened in user mode.
 

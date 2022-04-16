@@ -180,6 +180,7 @@ isspace(const char a)
 	return (a == ' ' || a == '\t' || a == '\n' || a == '\v' || a == '\f' || a == '\r');
 }
 
+// string to 10-borrow
 int
 atoi(const char *s)
 {
@@ -288,11 +289,12 @@ strtol(const char *s, char **endptr, int base)
 		s++, base = 8;
 	else if (base == 0)
 		base = 10;
+	else if (base == 0 && s[0] == '0' && s[1] == 'b')
+		base = 2;
 
 	// digits
 	while (1) {
 		int dig;
-
 		if (*s >= '0' && *s <= '9')
 			dig = *s - '0';
 		else if (*s >= 'a' && *s <= 'z')

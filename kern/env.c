@@ -273,7 +273,7 @@ region_alloc(struct Env *e, void *va, size_t len)
 	    panic("region_alloc(1): Unavailable virtual address for user environment");
 
     for (; vstart < vend; vstart += PGSIZE) {
-        if (!(p = alloc_page(ALLOC_ZERO)))
+        if (!(p = alloc_page(0)))
             panic("region_alloc(2): page allocation failed");
         if ((err = page_insert(e->env_pgdir, p, (void*)vstart, PTE_W | PTE_U)) < 0)
             panic("region_alloc(3): %e", err);
@@ -441,6 +441,7 @@ env_destroy(struct Env *e)
 	env_free(e);
 
 	cprintf("Destroyed the only environment - nothing more to do!\n");
+	curenv = NULL;
 	while (1)
 		monitor(NULL);
 }

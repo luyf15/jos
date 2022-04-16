@@ -23,6 +23,8 @@ const struct pmm_manager *pmm_manager;	// current physical memory manager
 
 extern unsigned int DFeInfo2;
 bool pae_support, pse_support;
+
+physaddr_t boot_alloc_end;	// the top of initialized kernel(physical address)
 // --------------------------------------------------------------
 // Detect machine's physical memory setup.
 // --------------------------------------------------------------
@@ -252,6 +254,8 @@ mem_init(void)
 	cprintf("envs start at: %.8x\n", envs);
 	cprintf("envs end at: %.8x\n", ((char*)envs) + (sizeof(struct Env) * NENV));
 
+	boot_alloc_end = (physaddr_t)PADDR(boot_alloc(0));
+
 	//////////////////////////////////////////////////////////////////////
 	// Now that we've allocated the initial kernel data structures, we set
 	// up the list of free physical pages. Once we've done so, all further
@@ -303,9 +307,9 @@ mem_init(void)
 	// Permissions: kernel RW, user NONE
 	// Your code goes here:
 	if (pae_support && pse_support)
-		boot_map_pse_region(kern_pgdir, KERNBASE, ROUNDUP((~KERNBASE)+1,LPGSIZE), 0, PTE_W);
+		boot_map_pse_region(kern_pgdir, KERNBASE, KERNSIZE, 0, PTE_W);
 	else
-		boot_map_region(kern_pgdir, KERNBASE, ~(KERNBASE)+1, 0, PTE_W);
+		boot_map_region(kern_pgdir, KERNBASE, KERNSIZE, 0, PTE_W);
 	// Check that the initial page directory has been set up correctly.
 	cprintf("bootstrap paging finished\n");
 	check_kern_pgdir();
