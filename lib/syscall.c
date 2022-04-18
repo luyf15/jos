@@ -37,27 +37,70 @@ syscall(int num, int check, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4, 
 	return ret;
 }
 
+// shouldn't define as an inline function
+static int32_t
+fast_syscall(int num, int check, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4, uint32_t a5)
+{
+	int32_t ret;
+
+	// The "volatile" tells the assembler not to optimize
+	// this instruction away just because we don't use the
+	// return value.
+
+	// move arguments into registers before %ebp modified
+	// as with static identifier, num, check and a1 are stroed
+	// in %eax, %edx and %ecx respectively, while a3, a4 and a5
+	// are addressed via 0xx(%ebp)
+	asm volatile("movl %0,%%edx"::"S"(a1):"%edx");
+	asm volatile("movl %0,%%ecx"::"S"(a2):"%ecx");
+	asm volatile("movl %0,%%ebx"::"S"(a3):"%ebx");
+	asm volatile("movl %0,%%edi"::"S"(a4):"%ebx");
+
+	// save user space %esp in %ebp passed into sysenter_handler
+	asm volatile("pushl %ebp");
+	asm volatile("movl %esp,%ebp");
+
+	// save user space %eip in %esi passed into sysenter_handler
+	asm volatile("leal .after_sysenter_label,%%esi":::"%esi");
+	asm volatile("sysenter \n\t"
+				 ".after_sysenter_label:"
+			:
+			: "a" (num)
+			: "memory");
+	
+	// retrieve return value
+	asm volatile("movl %%eax,%0":"=r"(ret));
+	
+	// restore %ebp
+	asm volatile("popl %ebp");
+
+	if(check && ret > 0)
+		panic("syscall %d returned %d (> 0)", num, ret);
+
+	return ret;
+}
+
 void
 sys_cputs(const char *s, size_t len)
 {
-	syscall(SYS_cputs, 0, (uint32_t)s, len, 0, 0, 0);
+	fast_syscall(SYS_cputs, 0, (uint32_t)s, len, 0, 0, 0);
 }
 
 int
 sys_cgetc(void)
 {
-	return syscall(SYS_cgetc, 0, 0, 0, 0, 0, 0);
+	return fast_syscall(SYS_cgetc, 0, 0, 0, 0, 0, 0);
 }
 
 int
 sys_env_destroy(envid_t envid)
 {
-	return syscall(SYS_env_destroy, 1, envid, 0, 0, 0, 0);
+	return fast_syscall(SYS_env_destroy, 1, envid, 0, 0, 0, 0);
 }
 
 envid_t
 sys_getenvid(void)
 {
-	 return syscall(SYS_getenvid, 0, 0, 0, 0, 0, 0);
+	 return fast_syscall(SYS_getenvid, 0, 0, 0, 0, 0, 0);
 }
 

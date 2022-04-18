@@ -89,7 +89,7 @@ mon_backtrace(int argc, char **argv, struct Trapframe *tf)
 		uint32_t eip = (uint32_t)*((int *)ebp + 1);
 		cprintf("\nebp %x  eip %x  args", ebp, eip);
 		int *args = (int *)ebp + 2;
-		for (int i = 0; i < 2; i++)
+		for (int i = 0; i < 4; i++)
 			cprintf(" %08.x ", args[i]);
 		cprintf("\n");
 		struct Eipdebuginfo info;
@@ -470,7 +470,7 @@ void
 monitor(struct Trapframe *tf)
 {
 	char *buf;
-
+	reset_fgcolor();
 	cprintf("Welcome to the JOS kernel monitor!\n");
 	cprintf("Type 'help' for a list of commands.\n");
 

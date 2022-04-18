@@ -269,7 +269,7 @@ region_alloc(struct Env *e, void *va, size_t len)
     vend = ROUNDUP((uintptr_t)va + len, PGSIZE);
 	
 	// Watch out for corner-cases
-	if ((uintptr_t)vend >= UTOP)
+	if (vend > UTOP || vstart >= UTOP)
 	    panic("region_alloc(1): Unavailable virtual address for user environment");
 
     for (; vstart < vend; vstart += PGSIZE) {

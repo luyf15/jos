@@ -72,4 +72,21 @@ _alltraps:
 spin_trap:
 	jmp spin_trap
 
+ .globl sysenter_handler
+ sysenter_handler:
+
+	# prepare arguments for syscall
+	pushl $0x0 # only four parameters supported, 0x0 for the fifth
+	pushl %edi # arg4
+	pushl %ebx # arg3
+	pushl %ecx # arg2
+	pushl %edx # arg1
+	pushl %eax # sysno
+	call syscall
+
+	# pepare user space information to restore
+	movl %esi,%edx # return eip
+	movl %ebp,%ecx # user space esp
+	sysexit
+
 .data

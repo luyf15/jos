@@ -261,4 +261,19 @@ xchg(volatile uint32_t *addr, uint32_t newval)
 	return result;
 }
 
+/* for fast syscall */
+#define IA32_SYSENTER_CS (0x174)
+#define IA32_SYSENTER_EIP (0x176)
+#define IA32_SYSENTER_ESP (0x175)
+
+#define rdmsr(msr,d_val,a_val) \
+	__asm__ __volatile__("rdmsr" \
+	: "=a" (a_val), "=d" (d_val) \
+	: "c" (msr))
+
+#define wrmsr(msr,d_val,a_val) \
+	__asm__ __volatile__("wrmsr" \
+	: /* no outputs */ \
+	: "c" (msr), "a" (a_val), "d" (d_val))
+
 #endif /* !JOS_INC_X86_H */

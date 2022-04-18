@@ -3,6 +3,7 @@
 #include <inc/stdio.h>
 #include <inc/string.h>
 #include <inc/assert.h>
+#include <inc/x86.h>
 
 #include <kern/monitor.h>
 #include <kern/console.h>
@@ -10,6 +11,15 @@
 #include <kern/kclock.h>
 #include <kern/env.h>
 #include <kern/trap.h>
+
+static void msr_init(){
+	extern void sysenter_handler();
+	uint32_t cs;
+	asm volatile("movl %%cs,%0":"=r"(cs));
+	wrmsr(IA32_SYSENTER_CS,0x0,cs);
+	wrmsr(IA32_SYSENTER_EIP,0x0,sysenter_handler);
+	wrmsr(IA32_SYSENTER_ESP,0x0,KSTACKTOP);
+}
 
 void
 i386_init(void)
@@ -55,13 +65,14 @@ i386_init(void)
 	// Lab 3 user environment initialization functions
 	env_init();
 	trap_init();
+	msr_init();
 
 #if defined(TEST)
 	// Don't touch -- used by grading script!
 	ENV_CREATE(TEST, ENV_TYPE_USER);
 #else
 	// Touch all you want.
-	ENV_CREATE(user_hello, ENV_TYPE_USER);
+	ENV_CREATE(user_breakpoint, ENV_TYPE_USER);
 #endif // TEST*
 
 	// We only have one user environment for now, so just run it.
