@@ -86,7 +86,7 @@ init_pmm_manager(void)
 }
 
 //init_memmap - call pmm->init_memmap to build Page struct for free memory  
-static void
+void
 page_init(void)
 {
 	pmm_manager->page_init();

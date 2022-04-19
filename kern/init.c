@@ -44,21 +44,21 @@ i386_init(void)
 	cons_init();
 	cprintf("\n");
 
-	set_fgcolor(COLOR_RED);
-	cprintf("red\n");
-	set_fgcolor(COLOR_WHITE);
-	cprintf("white\n");
-	highlight(2);
-	set_fgcolor(COLOR_RED);
-	cprintf("red\n");
-	set_fgcolor(COLOR_GREEN);
-	cprintf("green\n");
-	set_fgcolor(COLOR_CYAN);
-	cprintf("cyan\n");
-	set_fgcolor(COLOR_MAGENTA);
-	cprintf("magenta\n");
-	set_fgcolor(COLOR_WHITE);
-	cprintf("white\n");
+	// set_fgcolor(COLOR_RED);
+	// cprintf("red\n");
+	// set_fgcolor(COLOR_WHITE);
+	// cprintf("white\n");
+	// highlight(2);
+	// set_fgcolor(COLOR_RED);
+	// cprintf("red\n");
+	// set_fgcolor(COLOR_GREEN);
+	// cprintf("green\n");
+	// set_fgcolor(COLOR_CYAN);
+	// cprintf("cyan\n");
+	// set_fgcolor(COLOR_MAGENTA);
+	// cprintf("magenta\n");
+	// set_fgcolor(COLOR_WHITE);
+	// cprintf("white\n");
 
 	print_cpuid(0);
 	cprintf("\33[31;5;46;33;1;42mabcdefg\b\33[0m\n");
