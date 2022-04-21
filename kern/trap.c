@@ -196,7 +196,6 @@ trap_dispatch(struct Trapframe *tf)
 {
 	// Handle processor exceptions.
 	// LAB 3: Your code here.
-<<<<<<< HEAD
 	switch (tf->tf_trapno){
 		case T_PGFLT:
 			page_fault_handler(tf);
@@ -216,26 +215,23 @@ trap_dispatch(struct Trapframe *tf)
 							r->reg_esi);
 			return ;
 		}
-		// Handle spurious interrupts
-		// The hardware sometimes raises these because of noise on the
-		// IRQ line or other reasons. We don't care.
-		case IRQ_OFFSET:{
-			if (tf->tf_trapno == IRQ_OFFSET + IRQ_SPURIOUS) {
-				cprintf("Spurious interrupt on irq 7\n");
-				print_trapframe(tf);
-				return;
-			}
-		// Handle clock interrupts. Don't forget to acknowledge the
-		// interrupt using lapic_eoi() before calling the scheduler!
-		// LAB 4: Your code here.	
-		}
-		
 		default:
 			// cprintf("No.%d interrupt imcomplete.\n",tf->tf_trapno);
 			break;
 	}
 
+	// Handle spurious interrupts
+	// The hardware sometimes raises these because of noise on the
+	// IRQ line or other reasons. We don't care.
+	if (tf->tf_trapno == IRQ_OFFSET + IRQ_SPURIOUS) {
+		cprintf("Spurious interrupt on irq 7\n");
+		print_trapframe(tf);
+		return;
+	}
 
+	// Handle clock interrupts. Don't forget to acknowledge the
+	// interrupt using lapic_eoi() before calling the scheduler!
+	// LAB 4: Your code here.	
 
 
 	// Unexpected trap: The user process or the kernel has a bug.

@@ -14,6 +14,7 @@
 extern struct Page *pages;		// Physical page state array
 extern size_t npages;			// Amount of physical memory (in pages)
 extern size_t npages_basemem;	// Amount of base memory (in pages)
+extern physaddr_t boot_alloc_end;		// the top of initialized kernel
 
 // {1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024}
 // from 2^0 ~ 2^10
@@ -56,17 +57,18 @@ buddy_init_memmap(struct Page *base, size_t n)
 	zones[zone_num++].mem_base = base;
 	size_t order = MAX_ORDER, order_size = (1 << order);
 
-	if (n <= order_size)
-		p = base;
-	else
-		p = base + n - 1 - order_size;
+	// if (n <= order_size)
+	p = base;
+	// else
+	// 	p = base + n - 1 - order_size;
 
 	while (n != 0) {
 		while (n >= order_size) {
 			p->property = order;
 			SetPageProperty(p);
+			ClearPageReserved(p);
 			list_add(&page_free_list(order), &(p->pp_link));	//avoid access of unmapped high address while bootstrapping
-			n -= order_size, p -= order_size;
+			n -= order_size, p += order_size;
 			nr_free(order)++;
 		}
 		order--;
@@ -78,12 +80,11 @@ static void
 buddy_page_init(void)
 {
     #define MARK_USE(_i) SetPageReserved(&pages[_i])
+	#define MPCT MPENTRY_PADDR / PGSIZE
     //pages[_i].pp_ref = 0;
     //pages[_i].pp_link.next = &(pages[_i].pp_link);
 	//pages[_i].pp_link.prev = &(pages[_i].pp_link);
 
-    physaddr_t boot_alloc_end = (physaddr_t)PADDR(boot_alloc(0));
-	cprintf("[DEBUG]boot alloc end=%.8x\n", boot_alloc_end);
 	size_t i;
 
 	//jump over the gap between Base(IO) and Extended
@@ -98,7 +99,9 @@ buddy_page_init(void)
         MARK_USE(i);
     */
     //[1, npages_basemem)
-    buddy_init_memmap(&pages[1], npages_basemem - 1);
+    buddy_init_memmap(&pages[1], MPCT - 1);
+	//[1, npages_basemem)
+    buddy_init_memmap(&pages[MPCT+1], npages_basemem - MPCT - 1);
     //[boot_alloc_end / PGSIZE, npages)
     buddy_init_memmap((struct Page *)(pages + boot_alloc_end / PGSIZE), npages - boot_alloc_end / PGSIZE);
 
@@ -129,6 +132,12 @@ buddy_alloc_pages_sub(size_t order, int alloc_flags)
 	for (cur_order = order; cur_order <= MAX_ORDER; cur_order++) {
 		if (!list_empty(&page_free_list(cur_order))) {
 			list_entry_t *le = list_next(&page_free_list(cur_order));
+			// when mem_init, only buddys mapped by the bootstrap kern_pgdir used
+			if (alloc_flags & BUDDY_MEM_INIT) {
+				if (le2page(le, pp_link)->zone_num > 0 
+					&& (uintptr_t)page2kva(le2page(le, pp_link)) >= KERNBASE +BOOT_KERN_MAP_SIZE)
+					continue;
+			}
 			struct Page *page = le2page(le, pp_link);
 			nr_free(cur_order)--;
 			list_del(le);

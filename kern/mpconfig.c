@@ -97,7 +97,7 @@ mpsearch1(physaddr_t a, int len)
 // [MP 4] is in one of the following three locations:
 // 1) in the first KB of the EBDA;
 // 2) if there is no EBDA, in the last KB of system base memory;
-// 3) in the BIOS ROM between 0xE0000 and 0xFFFFF.
+// 3) in the BIOS ROM between 0xF0000 and 0xFFFFF.
 static struct mp *
 mpsearch(void)
 {

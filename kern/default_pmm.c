@@ -47,10 +47,12 @@ default_page_init(void)
 	//     Some of it is in use, some is free. Where is the kernel
 	//     in physical memory?  Which pages are already in use for
 	//     page tables and other data structures?
+	//  5) Mark the physical page at MPENTRY_PADDR as in use
+	// pages[_i].flags = 0x2;
 #define MARK_FREE(_i) do {\
     set_page_ref(&pages[_i], 0);\
     list_add_before(&page_free_list, &(pages[_i].pp_link));\
-	pages[_i].flags = 0x2;\
+	SetPageProperty(&pages[_i]);\
 	pages[_i].property = 0;\
 	nr_free++;\
 	} while(0)
@@ -64,23 +66,30 @@ default_page_init(void)
 
 	size_t i;
 
-	//jump over the gap between Base(IO) and Extended
-	//boot_alloc(0) returns "current" PG_aligned nextfree virt-addr
-	//last boot_alloc call allocated pages(=sizeofPageInfo*npages)
-    //boot_alloc_end = PADDR(boot_alloc(0));
+#define MPCT MPENTRY_PADDR / PGSIZE
+
     MARK_USE(0);
-    for (i = 1; i < npages_basemem; ++i)
+    for (i = 1; i < MPCT; ++i)
         MARK_FREE(i);
-	pages[1].property = npages_basemem - 1;
+	pages[1].property = MPCT - 1;
+
+	// jump the physical page at MPENTRY_PADDR
+	MARK_USE(MPCT);
+	for (i = MPCT + 1; i < npages_basemem; ++i)
+        MARK_FREE(i);
+	pages[MPCT + 1].property = npages_basemem - 1 - MPCT;
+	// jump over the gap between Base(IO) and Extended
     for (i = IOPHYSMEM / PGSIZE; i < EXTPHYSMEM / PGSIZE; ++i)
         MARK_USE(i);
-	//kernel_base to last boot_alloc end
+	
+	// kernel_base to last boot_alloc end
     for (i = EXTPHYSMEM / PGSIZE; i < boot_alloc_end / PGSIZE; ++i)
         MARK_USE(i);
     for (i = boot_alloc_end / PGSIZE; i < npages; ++i)
         MARK_FREE(i);
 	pages[boot_alloc_end / PGSIZE].property = npages - boot_alloc_end / PGSIZE;
 
+#undef MPCT
 #undef MARK_USE
 #undef MARK_FREE
 }

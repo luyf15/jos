@@ -16,7 +16,6 @@
 
 #define CMDBUF_SIZE	80	// enough for one VGA text line
 extern pde_t *kern_pgdir;
-extern struct Env *curenv;
 
 struct Command {
 	const char *name;

@@ -79,8 +79,8 @@ static void check_page_installed_pgdir(void);
 static void
 init_pmm_manager(void)
 {
-	pmm_manager = &default_pmm_manager;
-	// pmm_manager = &buddy_pmm_manager;
+	// pmm_manager = &default_pmm_manager;
+	pmm_manager = &buddy_pmm_manager;
 	cprintf("memory managment: %s\n", pmm_manager->name);
 	pmm_manager->init();
 }
@@ -95,7 +95,8 @@ page_init(void)
 // --------------------------------------------------------------
 // Tracking of physical pages.
 // The 'pages' array has one 'struct Page' entry per physical page.
-// Pages are reference counted, and free pages are kept on a linked list.
+// Pages are reference counted, 
+// and free pages are kept on a double-linked list.
 // --------------------------------------------------------------
 
 
@@ -190,7 +191,7 @@ boot_alloc(uint32_t n)
 	if (n > 0)
 		nextfree = ROUNDUP((char *)(nextfree + n), PGSIZE);
 	
-	if (nextfree > (char *)(KERNBASE + 0x800000)){		//only 8MB mapped on bootstrap
+	if (nextfree > (char *)(KERNBASE + BOOT_KERN_MAP_SIZE)){		//only 8MB mapped on bootstrap
 		panic("Out of memory!\n");
 		nextfree = result;	//resume nextfree
 		return NULL;
@@ -271,6 +272,7 @@ mem_init(void)
 	// panic("mem_init: This function is not finished\n");
 	//////////////////////////////////////////////////////////////////////
 	// Now we set up virtual memory
+	// LAB 3: Your code here.
 
 	//////////////////////////////////////////////////////////////////////
 	// Map 'pages' read-only by the user at linear address UPAGES
@@ -278,7 +280,6 @@ mem_init(void)
 	//    - the new image at UPAGES -- kernel R, user R
 	//      (ie. perm = PTE_U | PTE_P)
 	//    - pages itself -- kernel RW, user NONE
-	// Your code goes here:
 	boot_map_region(kern_pgdir, UPAGES, PTSIZE, PADDR(pages), PTE_U);
 	//////////////////////////////////////////////////////////////////////
 	// Map the 'envs' array read-only by the user at linear address UENVS
@@ -286,7 +287,6 @@ mem_init(void)
 	// Permissions:
 	//    - the new image at UENVS  -- kernel R, user R
 	//    - envs itself -- kernel RW, user NONE
-	// LAB 3: Your code here.
 	boot_map_region(kern_pgdir, UENVS, PTSIZE, PADDR(envs), PTE_U);
 	//////////////////////////////////////////////////////////////////////
 	// Use the physical memory that 'bootstack' refers to as the kernel
@@ -298,7 +298,6 @@ mem_init(void)
 	//       the kernel overflows its stack, it will fault rather than
 	//       overwrite memory.  Known as a "guard page".
 	//     Permissions: kernel RW, user NONE
-	// Your code goes here:
 	boot_map_region(kern_pgdir, KSTACKTOP-KSTKSIZE, KSTKSIZE, PADDR(bootstacktop)-KSTKSIZE, PTE_W);
 	//////////////////////////////////////////////////////////////////////
 	// Map all of physical memory at KERNBASE.
@@ -307,14 +306,10 @@ mem_init(void)
 	// We might not have 2^32 - KERNBASE bytes of physical memory, but
 	// we just set up the mapping anyway.
 	// Permissions: kernel RW, user NONE
-	// Your code goes here:
-
-	//lab3 head
 	if (pae_support && pse_support)
 		boot_map_pse_region(kern_pgdir, KERNBASE, KERNSIZE, 0, PTE_W);
 	else
 		boot_map_region(kern_pgdir, KERNBASE, KERNSIZE, 0, PTE_W);
-	//lab3 end
 	
 	// Initialize the SMP-related parts of the memory map
 	mem_init_mp();
@@ -371,93 +366,6 @@ mem_init_mp(void)
 
 }
 
-// --------------------------------------------------------------
-// Tracking of physical pages.
-// The 'pages' array has one 'struct PageInfo' entry per physical page.
-// Pages are reference counted, and free pages are kept on a linked list.
-// --------------------------------------------------------------
-
-//
-// Initialize page structure and memory free list.
-// After this is done, NEVER use boot_alloc again.  ONLY use the page
-// allocator functions below to allocate and deallocate physical
-// memory via the page_free_list.
-//
-void
-page_init(void)
-{
-	// LAB 4:
-	// Change your code to mark the physical page at MPENTRY_PADDR
-	// as in use
-
-	// The example code here marks all physical pages as free.
-	// However this is not truly the case.  What memory is free?
-	//  1) Mark physical page 0 as in use.
-	//     This way we preserve the real-mode IDT and BIOS structures
-	//     in case we ever need them.  (Currently we don't, but...)
-	//  2) The rest of base memory, [PGSIZE, npages_basemem * PGSIZE)
-	//     is free.
-	//  3) Then comes the IO hole [IOPHYSMEM, EXTPHYSMEM), which must
-	//     never be allocated.
-	//  4) Then extended memory [EXTPHYSMEM, ...).
-	//     Some of it is in use, some is free. Where is the kernel
-	//     in physical memory?  Which pages are already in use for
-	//     page tables and other data structures?
-	//
-	// Change the code to reflect this.
-	// NB: DO NOT actually touch the physical memory corresponding to
-	// free pages!
-	size_t i;
-	for (i = 0; i < npages; i++) {
-		pages[i].pp_ref = 0;
-		pages[i].pp_link = page_free_list;
-		page_free_list = &pages[i];
-	}
-}
-
-//
-// Allocates a physical page.  If (alloc_flags & ALLOC_ZERO), fills the entire
-// returned physical page with '\0' bytes.  Does NOT increment the reference
-// count of the page - the caller must do these if necessary (either explicitly
-// or via page_insert).
-//
-// Be sure to set the pp_link field of the allocated page to NULL so
-// page_free can check for double-free bugs.
-//
-// Returns NULL if out of free memory.
-//
-// Hint: use page2kva and memset
-struct PageInfo *
-page_alloc(int alloc_flags)
-{
-	// Fill this function in
-	return 0;
-}
-
-//
-// Return a page to the free list.
-// (This function should only be called when pp->pp_ref reaches 0.)
-//
-void
-page_free(struct PageInfo *pp)
-{
-	// Fill this function in
-	// Hint: You may want to panic if pp->pp_ref is nonzero or
-	// pp->pp_link is not NULL.
-}
-
-//
-// Decrement the reference count on a page,
-// freeing it if there are no more refs.
-//
-void
-page_decref(struct PageInfo* pp)
-{
-	if (--pp->pp_ref == 0)
-		page_free(pp);
-}
-// lab4 end
-
 // Given 'pgdir', a pointer to a page directory, pgdir_walk returns
 // a pointer to the page table entry (PTE) for linear address 'va'.
 // This requires walking the two-level page table structure.
@@ -499,6 +407,25 @@ pgdir_walk(pde_t *pgdir, const void *va, int create)
 	return (pgt + PTX(va));
 }
 
+static pte_t *
+pgdir_walk_for_init(pde_t *pgdir, const void *va, int create)
+{
+	// Fill this function in
+	pde_t *pde;
+	pte_t *pgt;
+	struct Page * pi;
+
+	pde = &pgdir[PDX(va)]; 
+	if (!(*pde & PTE_P)){	//pde not present
+		if (!create || !(pi = alloc_page(ALLOC_ZERO|BUDDY_MEM_INIT)))	//won't create or fail to allocate a pagetable
+			return NULL;
+		*pde = page2pa(pi) | PTE_P | PTE_W | PTE_U | PTE_PWT | PTE_PCD | PTE_G;
+		set_page_ref(pi, 1);
+	}
+	pgt = KADDR(PTE_ADDR(*pde));	//kva of the page table
+	return (pgt + PTX(va));
+}
+
 // Map [va, va+size) of virtual address space to physical [pa, pa+size)
 // in the page table rooted at pgdir.  Size is a multiple of PGSIZE, and
 // va and pa are both page-aligned.
@@ -520,7 +447,7 @@ boot_map_region(pde_t *pgdir, uintptr_t va, size_t size, physaddr_t pa, int perm
 		panic("non page-aligned");
 
 	for (i = 0; i < size; i += PGSIZE){
-		if (!(pte = pgdir_walk(pgdir, (void*)(va + i), 1)))
+		if (!(pte = pgdir_walk_for_init(pgdir, (void*)(va + i), 1)))
 			panic("failed to allocate a pagetable");
 		*pte = (pa + i) | perm | PTE_P;		//permissions in p should be strict
 	}
@@ -685,7 +612,15 @@ mmio_map_region(physaddr_t pa, size_t size)
 	// Hint: The staff solution uses boot_map_region.
 	//
 	// Your code here:
-	panic("mmio_map_region not implemented");
+	// panic("mmio_map_region not implemented");
+	uintptr_t start;
+	start = base;
+	size = ROUNDUP(size, PGSIZE);
+	if (base + size > MMIOLIM) 
+		panic("invalid mmio mapping over MMIOLIM");
+	base += size;
+	boot_map_region(kern_pgdir, start, size, pa, PTE_W|PTE_PCD|PTE_PWT);
+	return (void *)start;
 }
 
 static uintptr_t user_mem_check_addr;

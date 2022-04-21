@@ -17,6 +17,8 @@ extern size_t npages;
 
 extern pde_t *kern_pgdir;
 
+#define BOOT_KERN_MAP_SIZE 0x800000
+
 /* This macro takes a kernel virtual address -- an address that points above
  * KERNBASE, where the machine's maximum 256MB of physical memory is mapped --
  * and returns the corresponding physical address.  It panics if you pass it a
@@ -57,6 +59,8 @@ struct pmm_manager {
 enum {
 	// For page_alloc, zero the returned physical page.
 	ALLOC_ZERO = 1<<0,
+	// Used for buddy system, to avoid high unmapped memory while mem_init
+	BUDDY_MEM_INIT = 1<<1,
 };
 
 void	mem_init(void);
