@@ -77,8 +77,8 @@ static void check_page_installed_pgdir(void);
 static void
 init_pmm_manager(void)
 {
-	pmm_manager = &default_pmm_manager;
-	// pmm_manager = &buddy_pmm_manager;
+	// pmm_manager = &default_pmm_manager;
+	pmm_manager = &buddy_pmm_manager;
 	cprintf("memory managment: %s\n", pmm_manager->name);
 	pmm_manager->init();
 }
@@ -188,7 +188,7 @@ boot_alloc(uint32_t n)
 	if (n > 0)
 		nextfree = ROUNDUP((char *)(nextfree + n), PGSIZE);
 	
-	if (nextfree > (char *)(KERNBASE + 0x800000)){		//only 8MB mapped on bootstrap
+	if (nextfree > (char *)(KERNBASE + BOOT_KERN_MAP_SIZE)){		//only 8MB mapped on bootstrap
 		panic("Out of memory!\n");
 		nextfree = result;	//resume nextfree
 		return NULL;
@@ -379,6 +379,25 @@ pgdir_walk(pde_t *pgdir, const void *va, int create)
 	return (pgt + PTX(va));
 }
 
+static pte_t *
+pgdir_walk_for_init(pde_t *pgdir, const void *va, int create)
+{
+	// Fill this function in
+	pde_t *pde;
+	pte_t *pgt;
+	struct Page * pi;
+
+	pde = &pgdir[PDX(va)]; 
+	if (!(*pde & PTE_P)){	//pde not present
+		if (!create || !(pi = alloc_page(ALLOC_ZERO|BUDDY_MEM_INIT)))	//won't create or fail to allocate a pagetable
+			return NULL;
+		*pde = page2pa(pi) | PTE_P | PTE_W | PTE_U | PTE_PWT | PTE_PCD | PTE_G;
+		set_page_ref(pi, 1);
+	}
+	pgt = KADDR(PTE_ADDR(*pde));	//kva of the page table
+	return (pgt + PTX(va));
+}
+
 // Map [va, va+size) of virtual address space to physical [pa, pa+size)
 // in the page table rooted at pgdir.  Size is a multiple of PGSIZE, and
 // va and pa are both page-aligned.
@@ -400,7 +419,7 @@ boot_map_region(pde_t *pgdir, uintptr_t va, size_t size, physaddr_t pa, int perm
 		panic("non page-aligned");
 
 	for (i = 0; i < size; i += PGSIZE){
-		if (!(pte = pgdir_walk(pgdir, (void*)(va + i), 1)))
+		if (!(pte = pgdir_walk_for_init(pgdir, (void*)(va + i), 1)))
 			panic("failed to allocate a pagetable");
 		*pte = (pa + i) | perm | PTE_P;		//permissions in p should be strict
 	}
