@@ -63,6 +63,7 @@ enum {
 };
 
 void	mem_init(void);
+<<<<<<< HEAD
 void *boot_alloc(uint32_t n);
 struct Page *alloc_pages(size_t n, int alloc_flags);
 void	free_pages(struct Page *base, size_t n);
@@ -72,6 +73,17 @@ void	free_pages(struct Page *base, size_t n);
 size_t nr_free_pages(void);
 
 int		page_insert(pde_t *pgdir, struct Page *pp, void *va, int perm);
+=======
+
+void	page_init(void);
+struct PageInfo *alloc_pages(size_t n, int alloc_flags);
+void	free_pages(struct PageInfo *base, size_t n);
+#define page_alloc(alloc_flag) alloc_pages(1, alloc_flag)
+#define pse_page_alloc(alloc_flag) alloc_pages(1024, alloc_flag)
+#define	page_free(pp) free_pages(pp, 1)
+
+int	page_insert(pde_t *pgdir, struct PageInfo *pp, void *va, int perm);
+>>>>>>> 48ec33a4df43bb537b6536b5ecb76e9facaa6d4f
 void	page_remove(pde_t *pgdir, void *va);
 struct Page *page_lookup(pde_t *pgdir, void *va, pte_t **pte_store);
 void	page_decref(struct Page *pp);

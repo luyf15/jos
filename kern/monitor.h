@@ -25,8 +25,11 @@ int mon_dumpmem(int argc, char **argv, struct Trapframe *tf);
 int mon_rainbow(int argc, char **argv, struct Trapframe *tf);
 // cpuid in console
 int mon_cpuid(int argc, char **argv, struct Trapframe *tf);
+<<<<<<< HEAD
 
 //kernel debugger
 int mon_continue(int argc, char **argv, struct Trapframe *tf);
 int mon_step(int argc, char **argv, struct Trapframe *tf);
+=======
+>>>>>>> 48ec33a4df43bb537b6536b5ecb76e9facaa6d4f
 #endif	// !JOS_KERN_MONITOR_H

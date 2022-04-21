@@ -9,6 +9,7 @@
 #include <kern/console.h>
 #include <kern/pmap.h>
 #include <kern/kclock.h>
+<<<<<<< HEAD
 #include <kern/env.h>
 #include <kern/trap.h>
 
@@ -20,6 +21,8 @@ static void msr_init(){
 	wrmsr(IA32_SYSENTER_EIP,0x0,sysenter_handler);
 	wrmsr(IA32_SYSENTER_ESP,0x0,KSTACKTOP);
 }
+=======
+>>>>>>> 48ec33a4df43bb537b6536b5ecb76e9facaa6d4f
 
 void
 i386_init(void)
@@ -36,6 +39,7 @@ i386_init(void)
 	cons_init();
 	cprintf("\n");
 
+<<<<<<< HEAD
 	// set_fgcolor(COLOR_RED);
 	// cprintf("red\n");
 	// set_fgcolor(COLOR_WHITE);
@@ -51,6 +55,23 @@ i386_init(void)
 	// cprintf("magenta\n");
 	// set_fgcolor(COLOR_WHITE);
 	// cprintf("white\n");
+=======
+	set_fgcolor(COLOR_RED);
+	cprintf("red\n");
+	set_fgcolor(COLOR_WHITE);
+	cprintf("white\n");
+	highlight(2);
+	set_fgcolor(COLOR_RED);
+	cprintf("red\n");
+	set_fgcolor(COLOR_GREEN);
+	cprintf("green\n");
+	set_fgcolor(COLOR_CYAN);
+	cprintf("cyan\n");
+	set_fgcolor(COLOR_MAGENTA);
+	cprintf("magenta\n");
+	set_fgcolor(COLOR_WHITE);
+	cprintf("white\n");
+>>>>>>> 48ec33a4df43bb537b6536b5ecb76e9facaa6d4f
 
 	print_cpuid(0);
 	cprintf("\33[31;5;46;33;1;42mabcdefg\b\33[0m\n");
@@ -62,6 +83,7 @@ i386_init(void)
 	// Lab 2 memory management initialization functions
 	mem_init();
 
+<<<<<<< HEAD
 	// Lab 3 user environment initialization functions
 	env_init();
 	trap_init();
@@ -77,6 +99,11 @@ i386_init(void)
 
 	// We only have one user environment for now, so just run it.
 	env_run(&envs[0]);
+=======
+	// Drop into the kernel monitor.
+	while (1)
+		monitor(NULL);
+>>>>>>> 48ec33a4df43bb537b6536b5ecb76e9facaa6d4f
 }
 
 

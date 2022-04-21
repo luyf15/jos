@@ -31,10 +31,14 @@ KERN_SRCFILES :=	kern/entry.S \
 			lib/printfmt.c \
 			lib/readline.c \
 			lib/string.c \
+<<<<<<< HEAD
 			kern/cpuid.c \
 			kern/malloc.c \
 			kern/buddy.c \
 			kern/default_pmm.c
+=======
+			kern/cpuid.c
+>>>>>>> 48ec33a4df43bb537b6536b5ecb76e9facaa6d4f
 
 # Only build files if they exist.
 KERN_SRCFILES := $(wildcard $(KERN_SRCFILES))

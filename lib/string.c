@@ -180,7 +180,10 @@ isspace(const char a)
 	return (a == ' ' || a == '\t' || a == '\n' || a == '\v' || a == '\f' || a == '\r');
 }
 
+<<<<<<< HEAD
 // string to 10-borrow
+=======
+>>>>>>> 48ec33a4df43bb537b6536b5ecb76e9facaa6d4f
 int
 atoi(const char *s)
 {

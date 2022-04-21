@@ -181,22 +181,35 @@ struct Page {
 	list_entry_t pp_link;
      // array of flags that describe the status of the page frame
 	uint32_t flags;
+<<<<<<< HEAD
     // the num of free block when used in first fit pm manager
 	// when used in buddy system, it stores the order (the X in 2^X) of the continuous memory block
     unsigned int property;
 	// used in buddy system, the No. of zone which the page belongs to	
 	int zone_num;
+=======
+    // the num of free block, used in first fit pm manager
+    unsigned int property;
+
+>>>>>>> 48ec33a4df43bb537b6536b5ecb76e9facaa6d4f
 	// pp_ref is the count of pointers (usually in page table entries)
 	// to this page, for pages allocated using page_alloc.
 	// Pages allocated at boot time using pmap.c's
 	// boot_alloc do not have valid reference count fields.
+<<<<<<< HEAD
 	atomic_t pp_ref;
+=======
+	uint16_t pp_ref;
+>>>>>>> 48ec33a4df43bb537b6536b5ecb76e9facaa6d4f
 };
 
 /* Flags describing the status of a page frame */
 #define PG_reserved                 0       // the page descriptor is reserved for kernel or unusable
 #define PG_property                 1       // the member 'property' is valid
+<<<<<<< HEAD
 #define PG_slab						2 		// the page frame is for kmalloc slab allocator
+=======
+>>>>>>> 48ec33a4df43bb537b6536b5ecb76e9facaa6d4f
 
 #define SetPageReserved(page)       set_bit(PG_reserved, &((page)->flags))
 #define ClearPageReserved(page)     clear_bit(PG_reserved, &((page)->flags))
@@ -204,9 +217,12 @@ struct Page {
 #define SetPageProperty(page)       set_bit(PG_property, &((page)->flags))
 #define ClearPageProperty(page)     clear_bit(PG_property, &((page)->flags))
 #define PageProperty(page)          test_bit(PG_property, &((page)->flags))
+<<<<<<< HEAD
 #define SetPageSlab(page) 		set_bit(PG_slab, &((page)->flags))
 #define ClearPageSlab(page) 	clear_bit(PG_slab, &((page)->flags))
 #define PageSlab(page) 		test_bit(PG_slab, &((page)->flags))
+=======
+>>>>>>> 48ec33a4df43bb537b6536b5ecb76e9facaa6d4f
 
 /* free_area_t - maintains a doubly linked list to record free (unused) pages */
 typedef struct {
@@ -215,6 +231,10 @@ typedef struct {
 } free_area_t;
 
 #define le2page(le, member)	\
+<<<<<<< HEAD
     to_struct((le), struct Page, member)
+=======
+    to_struct((le), struct PageInfo, member)
+>>>>>>> 48ec33a4df43bb537b6536b5ecb76e9facaa6d4f
 #endif /* !__ASSEMBLER__ */
 #endif /* !JOS_INC_MEMLAYOUT_H */

@@ -2,6 +2,7 @@
 #define JOS_INC_ATOMIC_H
 
 /* Atomic operations that C can't guarantee us. Useful for resource counting etc.. */
+<<<<<<< HEAD
 #define LOCK_PREFIX "lock;"
 
 /* Atomic operations that C can't guarantee us. Useful for resource counting etc.. */
@@ -198,6 +199,8 @@ static inline int atomic_sub_return(atomic_t * v, int i)
 	return atomic_add_return(v, -i);
 }
 
+=======
+>>>>>>> 48ec33a4df43bb537b6536b5ecb76e9facaa6d4f
 
 static inline void set_bit(int nr, volatile void *addr) __attribute__((always_inline));
 static inline void clear_bit(int nr, volatile void *addr) __attribute__((always_inline));

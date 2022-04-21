@@ -7,7 +7,10 @@
 #include <inc/assert.h>
 #include <inc/x86.h>
 
+<<<<<<< HEAD
 #include <kern/env.h>
+=======
+>>>>>>> 48ec33a4df43bb537b6536b5ecb76e9facaa6d4f
 #include <kern/pmap.h>
 #include <kern/console.h>
 #include <kern/monitor.h>
@@ -16,7 +19,10 @@
 
 #define CMDBUF_SIZE	80	// enough for one VGA text line
 extern pde_t *kern_pgdir;
+<<<<<<< HEAD
 extern struct Env *curenv;
+=======
+>>>>>>> 48ec33a4df43bb537b6536b5ecb76e9facaa6d4f
 
 struct Command {
 	const char *name;
@@ -35,10 +41,13 @@ static struct Command commands[] = {
 	{ "showmap", "Show the mappings between given virtual memory range", mon_showmap },
     { "setperm", "Set the permission bits of a given mapping", mon_setperm },
     { "dumpmem", "Dump the content of a given virtual/physical memory range", mon_dumpmem},
+<<<<<<< HEAD
 	{ "step", "Single-steppedly execute the following instruction", mon_step},
 	{ "s", "Single-steppedly execute the following instruction", mon_step},
 	{ "continue", "continue execution", mon_continue},
 	{ "c", "continue execution", mon_continue},
+=======
+>>>>>>> 48ec33a4df43bb537b6536b5ecb76e9facaa6d4f
 };
 
 /***** Implementations of basic kernel monitor commands *****/
@@ -101,6 +110,7 @@ mon_backtrace(int argc, char **argv, struct Trapframe *tf)
 		//count++ ;
 	}
 	reset_fgcolor();
+<<<<<<< HEAD
 	return 0;
 }
 
@@ -145,6 +155,52 @@ mon_cpuid(int argc, char **argv, struct Trapframe *tf)
 	return 0;
 }
 
+=======
+	return 0;
+}
+
+int
+mon_clear(int argc, char **argv, struct Trapframe *tf)
+{
+	return clear();
+}
+
+
+void
+rainbow(int stride)
+{
+	static const char msg[] = "rainbow!";
+	for (int i = 0; i < COLOR_NUM; ++i) {
+		set_fgcolor(i);
+		set_bgcolor((i + stride) % COLOR_NUM);
+		cprintf("%c", msg[i % (sizeof(msg) - 1)]);
+	}
+	reset_fgcolor();
+	reset_bgcolor();
+	cprintf("\n");
+}
+ 
+int 
+mon_rainbow(int argc, char **argv, struct Trapframe *tf)
+{
+	for(int i = 1; i < COLOR_NUM; ++i)
+		rainbow(i);
+	return 0;
+}
+
+int
+mon_cpuid(int argc, char **argv, struct Trapframe *tf)
+{
+	highlight(1);
+	if (argc >= 2)
+		print_cpuid(atoi(argv[1]));
+	else
+		print_cpuid(1);
+	lightdown();
+	return 0;
+}
+
+>>>>>>> 48ec33a4df43bb537b6536b5ecb76e9facaa6d4f
 // map a capital character to permission bitnum
 static inline uint32_t
 char2perm(char c) {
@@ -224,9 +280,15 @@ mon_showmap(int argc, char **argv, struct Trapframe *tf)
 	cprintf(ATTR_bold);
     for(; vstart <= vend; ) {
 		//cprintf("vstart: 0x%08x, vend: 0x%08x\n", vstart, vend);
+<<<<<<< HEAD
 		char permission[10] = { 0 };
 		// permission[9] = '\0';
 		pde = PDE((curenv?curenv->env_pgdir:kern_pgdir), vstart);
+=======
+		char permission[10];
+		permission[9] = '\0';
+		pde = PDE(kern_pgdir, vstart);
+>>>>>>> 48ec33a4df43bb537b6536b5ecb76e9facaa6d4f
 		if (pde & PTE_P) {
 			if (pde & PTE_PS) {
 				physaddr_t pvaddr = PTE_ADDR(pde) | (PTX(vstart) << PTXSHIFT);
@@ -237,9 +299,15 @@ mon_showmap(int argc, char **argv, struct Trapframe *tf)
 				vstart += LPGSIZE;
 			}
 			else {
+<<<<<<< HEAD
 				pte = PTE((curenv?curenv->env_pgdir:kern_pgdir), vstart);
 				if (pte & PTE_P) {
 					cprintf("pte perm:0x%03x\n", PERM(pte));
+=======
+				pte = PTE(kern_pgdir, vstart);
+				if (pte & PTE_P) {
+					cprintf("pte perm:0x%03x\n",PERM(pte));
+>>>>>>> 48ec33a4df43bb537b6536b5ecb76e9facaa6d4f
 					perm2str(permission, PERM(pte));
 					cprintf("(PSE_OFF) VA: 0x%08x, PA: 0x%08x, PERM: %s\n",
             			vstart, PTE_ADDR(pde), permission);
@@ -253,14 +321,22 @@ mon_showmap(int argc, char **argv, struct Trapframe *tf)
         } else {
             cprintf("VA: 0x%08x, PA: No Mapping\n", vstart);
 			cprintf(ATTR_OFF);
+<<<<<<< HEAD
 			return 1;
+=======
+			return -1;
+>>>>>>> 48ec33a4df43bb537b6536b5ecb76e9facaa6d4f
 		}
     }
 	cprintf(ATTR_OFF);
     return 0;
 help:
 	cprintf(msg);
+<<<<<<< HEAD
     return 1;
+=======
+    return -1;
+>>>>>>> 48ec33a4df43bb537b6536b5ecb76e9facaa6d4f
 }
 
 int 
@@ -285,7 +361,11 @@ mon_setperm(int argc, char **argv, struct Trapframe *tf)
 	strncpy(permission, argv[2], 9);
 	perm = str2perm(permission);
 	//cprintf("perm=0x%03x\n", perm);
+<<<<<<< HEAD
 	pde = curenv ? &curenv->env_pgdir[PDX(va)] : &kern_pgdir[PDX(va)];
+=======
+	pde = &kern_pgdir[PDX(va)];
+>>>>>>> 48ec33a4df43bb537b6536b5ecb76e9facaa6d4f
 	if (*pde & PTE_PS){
 		if (*pde & PTE_P) {
 			*pde = (*pde & ~0xFFF) | perm | PTE_P | PTE_PS;
@@ -294,23 +374,38 @@ mon_setperm(int argc, char **argv, struct Trapframe *tf)
 		}
 		else {
 			cprintf("No such mapping\n");
+<<<<<<< HEAD
 			return 1;
 		}
 	} else {
 		pte = pgdir_walk((curenv?curenv->env_pgdir:kern_pgdir), (void*)va, 0);
+=======
+			return -1;
+		}
+	} else {
+		pte = pgdir_walk(kern_pgdir, (void*)va, 0);
+>>>>>>> 48ec33a4df43bb537b6536b5ecb76e9facaa6d4f
 		if (pte && *pte & PTE_P) {
 			*pte = (*pte & ~0xFFF) | (perm & 0xFFF) | PTE_P;
 			cprintf("New mapping = VA: 0x%08x, PA: 0x%08x, perm: 0x%03x.\n",
 				va, PTE_ADDR(*pte)|PGOFF(va), PERM(*pte));
 		} else {
 			cprintf("No such mapping\n");
+<<<<<<< HEAD
 			return 1;
+=======
+			return -1;
+>>>>>>> 48ec33a4df43bb537b6536b5ecb76e9facaa6d4f
 		}
 	}
     return 0;
 help: 
     cprintf(msg);
+<<<<<<< HEAD
     return 1;
+=======
+    return -1;
+>>>>>>> 48ec33a4df43bb537b6536b5ecb76e9facaa6d4f
 }
 
 int
@@ -365,6 +460,7 @@ mon_dumpmem(int argc, char **argv, struct Trapframe *tf)
         uint32_t next;
         pte_t *pte;
         while(mstart < mend) {
+<<<<<<< HEAD
 			if (PDE((curenv?curenv->env_pgdir:kern_pgdir), mstart) & PTE_PS) {
 				if (PDE((curenv?curenv->env_pgdir:kern_pgdir), mstart) & PTE_P) {
 					next = MIN((uint32_t)PGADDR(PDX(mstart), PTX(mstart) + 1, 0), mend);
@@ -372,12 +468,24 @@ mon_dumpmem(int argc, char **argv, struct Trapframe *tf)
 						cprintf("[VA 0x%08x, PA 0x%08x]: %02x\n",
 						 mstart, PTE_ADDR(PDE((curenv?curenv->env_pgdir:kern_pgdir), mstart))
 						 |(PTX(mstart) << PTXSHIFT)|PGOFF(mstart), *(uint8_t*)mstart);
+=======
+			if (PDE(kern_pgdir, mstart) & PTE_PS) {
+				if (PDE(kern_pgdir, mstart) & PTE_P) {
+					next = MIN((uint32_t)PGADDR(PDX(mstart), PTX(mstart) + 1, 0), mend);
+					for (; mstart < next; ++mstart)
+						cprintf("[VA 0x%08x, PA 0x%08x]: %02x\n",
+						 mstart, PTE_ADDR(PDE(kern_pgdir, mstart))|(PTX(mstart) << PTXSHIFT)|PGOFF(mstart), *(uint8_t*)mstart);
+>>>>>>> 48ec33a4df43bb537b6536b5ecb76e9facaa6d4f
 				} else {
 					cprintf("[VA 0x%08x, PA No-mapping]: None\n", mstart);
 
 				}
 			} else {
+<<<<<<< HEAD
 				if (!(pte = pgdir_walk((curenv?curenv->env_pgdir:kern_pgdir), (void*)mstart, 0))) {
+=======
+				if (!(pte = pgdir_walk(kern_pgdir, (void*)mstart, 0))) {
+>>>>>>> 48ec33a4df43bb537b6536b5ecb76e9facaa6d4f
 					next = MIN((uint32_t)PGADDR(PDX(mstart) + 1, 0, 0), mend);
 					for (; mstart < next; ++mstart)
 						cprintf("[VA 0x%08x, PA No-mapping]: None\n", mstart);
@@ -397,6 +505,7 @@ mon_dumpmem(int argc, char **argv, struct Trapframe *tf)
     return 0;
 help:
 	cprintf(msg);
+<<<<<<< HEAD
 	return 1;
 }
 
@@ -420,6 +529,9 @@ mon_continue(int argc, char **argv, struct Trapframe *tf)
         return 0;
     tf->tf_eflags &= ~FL_TF;
     return -1;
+=======
+	return -1;
+>>>>>>> 48ec33a4df43bb537b6536b5ecb76e9facaa6d4f
 }
 
 /***** Kernel monitor command interpreter *****/
