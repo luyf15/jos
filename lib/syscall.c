@@ -56,8 +56,14 @@ fast_syscall(int num, int check, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t
 	asm volatile("movl %0,%%ebx"::"S"(a3):"%ebx");
 	asm volatile("movl %0,%%edi"::"S"(a4):"%ebx");
 
-	// save user space %esp in %ebp passed into sysenter_handler
+	// 1. save eflags
+	// 2. save user space %esp in %ebp passed into sysenter_handler
+	// 3. save the fifth parameter on the stack cuz there is no
+	// idle register to pass it
+	asm volatile("pushfl");
 	asm volatile("pushl %ebp");
+	asm volatile("pushl %0"::"S"(a5));
+	asm volatile("add $4,%esp");
 	asm volatile("movl %esp,%ebp");
 
 	// save user space %eip in %esi passed into sysenter_handler
@@ -70,9 +76,10 @@ fast_syscall(int num, int check, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t
 	
 	// retrieve return value
 	asm volatile("movl %%eax,%0":"=r"(ret));
-	
+
 	// restore %ebp
 	asm volatile("popl %ebp");
+	asm volatile("add $4,%esp");
 
 	if(check && ret > 0)
 		panic("syscall %d returned %d (> 0)", num, ret);
@@ -95,7 +102,7 @@ sys_cgetc(void)
 int
 sys_env_destroy(envid_t envid)
 {
-	return fast_syscall(SYS_env_destroy, 1, envid, 0, 0, 0, 0);
+	return syscall(SYS_env_destroy, 1, envid, 0, 0, 0, 0);
 }
 
 envid_t

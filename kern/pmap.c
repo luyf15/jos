@@ -6,6 +6,8 @@
 #include <inc/string.h>
 #include <inc/assert.h>
 #include <inc/list.h>
+#include <inc/.config>
+
 #include <kern/pmap.h>
 #include <kern/kclock.h>
 #include <kern/env.h>
@@ -22,8 +24,7 @@ pde_t *kern_pgdir;		// Kernel's initial page directory
 struct Page *pages;		// Physical page state array
 const struct pmm_manager *pmm_manager;	// current physical memory manager
 
-extern unsigned int DFeInfo2;
-bool pae_support, pse_support;
+extern bool pae_support, pse_support;
 
 physaddr_t boot_alloc_end;	// the top of initialized kernel(physical address)
 // --------------------------------------------------------------
@@ -146,6 +147,31 @@ static void
 check_pmm(void)
 {
 	pmm_manager->check();
+
+	// test mmio_map_region
+	uintptr_t mm1, mm2;
+	mm1 = (uintptr_t) mmio_map_region(0, 4097);
+	mm2 = (uintptr_t) mmio_map_region(0, 4096);
+	// check that they're in the right region
+	assert(mm1 >= MMIOBASE && mm1 + 8192 < MMIOLIM);
+	assert(mm2 >= MMIOBASE && mm2 + 8192 < MMIOLIM);
+	// check that they're page-aligned
+	assert(mm1 % PGSIZE == 0 && mm2 % PGSIZE == 0);
+	// check that they don't overlap
+	assert(mm1 + 8192 <= mm2);
+	// check page mappings
+	assert(check_va2pa(kern_pgdir, mm1) == 0);
+	assert(check_va2pa(kern_pgdir, mm1+PGSIZE) == PGSIZE);
+	assert(check_va2pa(kern_pgdir, mm2) == 0);
+	assert(check_va2pa(kern_pgdir, mm2+PGSIZE) == ~0);
+	// check permissions
+	assert(*pgdir_walk(kern_pgdir, (void*) mm1, 0) & (PTE_W|PTE_PWT|PTE_PCD));
+	assert(!(*pgdir_walk(kern_pgdir, (void*) mm1, 0) & PTE_U));
+	// clear the mappings
+	*pgdir_walk(kern_pgdir, (void*) mm1, 0) = 0;
+	*pgdir_walk(kern_pgdir, (void*) mm1 + PGSIZE, 0) = 0;
+	*pgdir_walk(kern_pgdir, (void*) mm2, 0) = 0;
+
 	cprintf("check_memory_manager():%s succeeded!\n",pmm_manager->name);
 }
 
@@ -213,8 +239,6 @@ mem_init(void)
 {
 	uint32_t cr0;
 	size_t n;
-	pae_support = (DFeInfo2 & 0x00000040 ) >> 6;
-	pse_support = (DFeInfo2 & 0x00000008 ) >> 3;
 	init_pmm_manager();
 	// Find out how much memory the machine has (npages & npages_basemem).
 	i386_detect_memory();
@@ -298,7 +322,7 @@ mem_init(void)
 	//       the kernel overflows its stack, it will fault rather than
 	//       overwrite memory.  Known as a "guard page".
 	//     Permissions: kernel RW, user NONE
-	boot_map_region(kern_pgdir, KSTACKTOP-KSTKSIZE, KSTKSIZE, PADDR(bootstacktop)-KSTKSIZE, PTE_W);
+	// boot_map_region(kern_pgdir, KSTACKTOP-KSTKSIZE, KSTKSIZE, PADDR(bootstacktop)-KSTKSIZE, PTE_W);
 	//////////////////////////////////////////////////////////////////////
 	// Map all of physical memory at KERNBASE.
 	// Ie.  the VA range [KERNBASE, 2^32) should map to
@@ -306,11 +330,14 @@ mem_init(void)
 	// We might not have 2^32 - KERNBASE bytes of physical memory, but
 	// we just set up the mapping anyway.
 	// Permissions: kernel RW, user NONE
+#ifdef CONF_HUGE_PAGE
 	if (pae_support && pse_support)
 		boot_map_pse_region(kern_pgdir, KERNBASE, KERNSIZE, 0, PTE_W);
 	else
 		boot_map_region(kern_pgdir, KERNBASE, KERNSIZE, 0, PTE_W);
-	
+#else
+	boot_map_region(kern_pgdir, KERNBASE, KERNSIZE, 0, PTE_W);
+#endif
 	// Initialize the SMP-related parts of the memory map
 	mem_init_mp();
 	// Check that the initial page directory has been set up correctly.
@@ -324,8 +351,10 @@ mem_init(void)
 	//
 	// If the machine reboots at this point, you've probably set up your
 	// kern_pgdir wrong.
+#ifdef CONF_HUGE_PAGE
 	if (pae_support && pse_support)
 		lcr4(rcr4()|CR4_PSE);
+#endif
 
 	lcr3(PADDR(kern_pgdir));
 
@@ -340,7 +369,6 @@ mem_init(void)
 	check_page_installed_pgdir();
 }
 
-// lab4 head
 // Modify mappings in kern_pgdir to support SMP
 //   - Map the per-CPU stacks in the region [KSTACKTOP-PTSIZE, KSTACKTOP)
 //
@@ -363,7 +391,13 @@ mem_init_mp(void)
 	//     Permissions: kernel RW, user NONE
 	//
 	// LAB 4: Your code here:
-
+	size_t i;
+	for (i = 0; i < NCPU; i++)
+		boot_map_region(kern_pgdir,
+			KSTACKTOP - KSTKSIZE - i * (KSTKSIZE + KSTKGAP),
+            KSTKSIZE,
+            PADDR(percpu_kstacks[i]),
+            PTE_W);
 }
 
 // Given 'pgdir', a pointer to a page directory, pgdir_walk returns
@@ -415,7 +449,7 @@ pgdir_walk_for_init(pde_t *pgdir, const void *va, int create)
 	pte_t *pgt;
 	struct Page * pi;
 
-	pde = &pgdir[PDX(va)]; 
+	pde = &pgdir[PDX(va)];
 	if (!(*pde & PTE_P)){	//pde not present
 		if (!create || !(pi = alloc_page(ALLOC_ZERO|BUDDY_MEM_INIT)))	//won't create or fail to allocate a pagetable
 			return NULL;
@@ -439,7 +473,6 @@ pgdir_walk_for_init(pde_t *pgdir, const void *va, int create)
 static void
 boot_map_region(pde_t *pgdir, uintptr_t va, size_t size, physaddr_t pa, int perm)
 {
-	// Fill this function in
 	size_t i;
 	pte_t *pte;
 
@@ -461,10 +494,10 @@ boot_map_region(pde_t *pgdir, uintptr_t va, size_t size, physaddr_t pa, int perm
 // This function is only intended to set up the ``static'' mappings
 // above UTOP. As such, it should *not* change the pp_ref field on the
 // mapped pages.
+#ifdef CONF_HUGE_PAGE
 static void
 boot_map_pse_region(pde_t *pgdir, uintptr_t va, size_t size, physaddr_t pa, int perm)
 {
-	// Fill this function in
 	size_t i;
 
 	if ((va & (LPGSIZE - 1)) || (pa & (LPGSIZE - 1)) || (size % LPGSIZE))
@@ -475,7 +508,7 @@ boot_map_pse_region(pde_t *pgdir, uintptr_t va, size_t size, physaddr_t pa, int 
 			(pde_t) ((pa + i) | perm | PTE_P | PTE_PS);		//permissions should be strict cos it's used as a pte
 	}
 }
-
+#endif
 
 // Map the physical page 'pp' at virtual address 'va'.
 // The permissions (the low 12 bits) of the page table entry
@@ -529,7 +562,16 @@ page_insert(pde_t *pgdir, struct Page *pp, void *va, int perm)
 struct Page *
 page_lookup(pde_t *pgdir, void *va, pte_t **pte_store)
 {
-	// Fill this function in
+	pde_t *pde;
+	pde = &pgdir[PDX(va)];
+	if (!pde || !(*pde & PTE_P))
+		return NULL;
+	else if (*pde & PTE_PS) {
+		if (pte_store)
+			*pte_store = (pte_t *)KADDR(PTE_ADDR(*pde));
+		return pa2page(PTE_ADDR(*pde) | (PTX(va) << PTXSHIFT));
+	}
+
 	pte_t *pte = pgdir_walk(pgdir, va, 0);
 	if (!pte || !(*pte & PTE_P))
 		return NULL;

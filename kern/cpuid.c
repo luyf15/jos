@@ -2,11 +2,14 @@
 #include <inc/x86.h>
 #include <inc/types.h>
 
-unsigned int DBaseIndex, DFeInfo, DFeInfo2, DCPUBaseInfo;
-unsigned int DFeIndex, DCPUExInfo;
-unsigned int DOther[4], DTLB[4], DProceSN[2];
-char cCom[13] = {0};
-char cProStr[49];
+// show the support in CPU
+bool pae_support, pse_support;
+
+static unsigned int DBaseIndex, DFeInfo, DFeInfo2, DCPUBaseInfo;
+static unsigned int DFeIndex, DCPUExInfo;
+static unsigned int DOther[4], DTLB[4], DProceSN[2];
+static char cCom[13] = {0};
+static char cProStr[49];
 static uint32_t saved = 0;
 
 void
@@ -111,3 +114,10 @@ print_cpuid(int show){
         saved = 0;
 }
 
+void
+init_cpuid(void)
+{
+    print_cpuid(0);
+    pae_support = (DFeInfo2 & 0x00000040 ) >> 6;
+	pse_support = (DFeInfo2 & 0x00000008 ) >> 3;
+}

@@ -11,6 +11,7 @@
 #include <kern/syscall.h>
 #include <kern/console.h>
 #include <kern/sched.h>
+#include <kern/spinlock.h>
 
 // Print a string to the system console.
 // The string is exactly 'len' characters long.
@@ -68,6 +69,7 @@ sys_env_destroy(envid_t envid)
 static void
 sys_yield(void)
 {
+	lock_kernel();
 	sched_yield();
 }
 
@@ -271,8 +273,6 @@ syscall(uint32_t syscallno, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4, 
 	// Call the function corresponding to the 'syscallno' parameter.
 	// Return any appropriate return value.
 	// LAB 3: Your code here.
-
-	// panic("syscall not implemented");
 	switch (syscallno) {
 		case SYS_cputs: {
 			sys_cputs((const char *)a1, (size_t)a2);
@@ -284,9 +284,116 @@ syscall(uint32_t syscallno, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4, 
 			return sys_env_destroy((envid_t)a1);
 		case SYS_getenvid: 
 			return sys_getenvid();
+		case SYS_yield: {
+			sys_yield();
+			return 0;
+		}
 		case NSYSCALLS:
 		default:
 			return -E_INVAL;
 	}
+}
+
+// Dispatches to the correct kernel function, passing the arguments.
+int32_t
+fast_syscall(uint32_t syscallno, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4, uint32_t a5)
+{
+	int ret;
+	uint32_t eflags;
+
+	// // Garbage collect if current enviroment is a zombie
+	// lock_env();
+	// if (curenv->env_status == ENV_DYING) {
+	// 	lock_page();
+	// 	env_free(curenv);
+	// 	unlock_page();
+	// 	curenv = NULL;
+	// 	sched_yield();
+	// }
+	// unlock_env();
+	
+	// save trapframe of current environment in curenv
+	save_curenv_trapframe();
+	
+	// Call the function corresponding to the 'syscallno' parameter.
+	// Return any appropriate return value.
+	// LAB 3: Your code here.
+	switch (syscallno) {
+	case SYS_cputs:	
+		sys_cputs((char*)a1, a2);
+		ret = 0;
+		break;
+	case SYS_cgetc: 
+		ret = sys_cgetc();
+		break;
+	case SYS_getenvid: 
+		ret = sys_getenvid();
+		break;
+	case SYS_env_destroy:
+		ret = sys_env_destroy(a1);
+		break;
+	case SYS_page_alloc:
+		ret = sys_page_alloc(a1, (void*)a2, a3);
+		break;
+	case SYS_page_map:
+		ret = sys_page_map(a1, (void*)a2, a3, (void*)a4, a5);
+		break;
+	case SYS_page_unmap:
+		ret = sys_page_unmap(a1, (void*)a2);
+		break;
+	case SYS_exofork:
+		ret = sys_exofork();
+		break;
+	case SYS_env_set_status:
+		ret = sys_env_set_status(a1, a2);
+		break;
+	case SYS_env_set_pgfault_upcall:
+		ret = sys_env_set_pgfault_upcall(a1, (void*)a2);
+		break;
+	case SYS_yield:
+		sys_yield();
+		ret = 0;
+		break;
+	case SYS_ipc_try_send:
+		ret = sys_ipc_try_send(a1, a2, (void*)a3, a4);
+		break;
+	case SYS_ipc_recv:
+		ret = sys_ipc_recv((void*)a1);
+		break;
+	default:
+		ret= -E_INVAL;
+	}
+
+	// save return value in env's trapframe
+	// in case that this function doesn't return
+	// and the env is resumed from its trapframe
+	curenv->env_tf.tf_regs.reg_eax = ret;
+
+	// read user eflags to restore it manually
+	// Here we must read and cache it on kernel
+	// stack before unlock kernel cuz curenv is
+	// a public memory resource, we are fobidden 
+	// to read it wihout holding kernel lock
+	// eflags = curenv->env_tf.tf_eflags;
+
+	// restore user eflags with IF diabled
+	// (later enable it right before 'sysexit' instruction)
+	// write_eflags(eflags&~FL_IF);
+
+	return ret;
+}
+
+static inline 
+void save_curenv_trapframe(){
+	// asm volatile("mov %%esi,%0":"=a"(curenv->env_tf.tf_eip));
+	asm volatile("mov (%%ebp),%0":"=a"(curenv->env_tf.tf_esp));
+	asm volatile("mov (%1),%0":"=a"(curenv->env_tf.tf_regs.reg_ebp):"a"(curenv->env_tf.tf_esp));
+	asm volatile("mov 4(%1),%0":"=a"(curenv->env_tf.tf_eflags):"a"(curenv->env_tf.tf_esp));
+	asm volatile("mov 0xc(%%ebp),%0":"=a"(curenv->env_tf.tf_regs.reg_edx));
+	asm volatile("mov 0x10(%%ebp),%0":"=a"(curenv->env_tf.tf_regs.reg_ecx));
+	asm volatile("mov 0x14(%%ebp),%0":"=a"(curenv->env_tf.tf_regs.reg_ebx));
+	asm volatile("mov 0x18(%%ebp),%0":"=a"(curenv->env_tf.tf_regs.reg_edi));
+	// asm volatile("mov %%es,%0":"=a"(curenv->env_tf.tf_es));
+	// asm volatile("mov %%ds,%0":"=a"(curenv->env_tf.tf_ds));
 }
 

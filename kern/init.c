@@ -4,6 +4,7 @@
 #include <inc/string.h>
 #include <inc/assert.h>
 #include <inc/x86.h>
+#include <inc/.config>
 
 #include <kern/monitor.h>
 #include <kern/console.h>
@@ -22,9 +23,10 @@ static void msr_init(){
 	extern void sysenter_handler();
 	uint32_t cs;
 	asm volatile("movl %%cs,%0":"=r"(cs));
-	wrmsr(IA32_SYSENTER_CS,0x0,cs);
-	wrmsr(IA32_SYSENTER_EIP,0x0,sysenter_handler);
-	wrmsr(IA32_SYSENTER_ESP,0x0,KSTACKTOP);
+	wrmsr(IA32_SYSENTER_CS, 0x0, cs);
+	wrmsr(IA32_SYSENTER_EIP, 0x0, sysenter_handler);
+	wrmsr(IA32_SYSENTER_ESP, 0x0,
+			KSTACKTOP - cpunum() * (KSTKGAP + KSTKSIZE));	//Multi-processor
 }
 
 void
@@ -59,8 +61,7 @@ i386_init(void)
 	// cprintf("magenta\n");
 	// set_fgcolor(COLOR_WHITE);
 	// cprintf("white\n");
-
-	print_cpuid(0);
+	init_cpuid();
 	cprintf("\33[31;5;46;33;1;42mabcdefg\b\33[0m\n");
     
 	reset_attr();
@@ -84,6 +85,7 @@ i386_init(void)
 
 	// Acquire the big kernel lock before waking up APs
 	// Your code here:
+	lock_kernel();
 
 	// Starting non-boot CPUs
 	boot_aps();
@@ -93,7 +95,9 @@ i386_init(void)
 	ENV_CREATE(TEST, ENV_TYPE_USER);
 #else
 	// Touch all you want.
-	ENV_CREATE(user_primes, ENV_TYPE_USER);
+	ENV_CREATE(user_breakpoint, ENV_TYPE_USER, 15);
+	// ENV_CREATE(user_hello, ENV_TYPE_USER, 10);
+
 #endif // TEST*
 
 	// Schedule and run the first user environment!
@@ -136,23 +140,34 @@ boot_aps(void)
 void
 mp_main(void)
 {
+#ifdef CONF_HUGE_PAGE
+	extern bool pae_support, pse_support;
+	// Enable page size extension
+	if (pae_support && pse_support)
+		lcr4(rcr4()|CR4_PSE);
+#endif
+
 	// We are in high EIP now, safe to switch to kern_pgdir 
 	lcr3(PADDR(kern_pgdir));
 	cprintf("SMP: CPU %d starting\n", cpunum());
 
+	//each processor need initialize their seperated states
+	msr_init();
 	lapic_init();
 	env_init_percpu();
 	trap_init_percpu();
-	xchg(&thiscpu->cpu_status, CPU_STARTED); // tell boot_aps() we're up
+	xchg(&thiscpu->cpu_status, CPU_STARTED); // tqell boot_aps() we're up
 
+	// ENV_CREATE(user_breakpoint, ENV_TYPE_USER, 10);
 	// Now that we have finished some basic setup, call sched_yield()
 	// to start running processes on this CPU.  But make sure that
 	// only one CPU can enter the scheduler at a time!
 	//
 	// Your code here:
-
+	lock_kernel();
+	sched_yield();
 	// Remove this after you finish Exercise 6
-	for (;;);
+	// for (;;);
 }
 
 /*

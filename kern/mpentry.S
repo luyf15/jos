@@ -76,7 +76,12 @@ start32:
 	# Call mp_main().  (Exercise for the reader: why the indirect call?)
 	movl    $mp_main, %eax
 	call    *%eax
-
+	# (1) alternative method no.1
+	# push	$spin
+	# push	$mp_main
+	# ret
+	# (2) alternative method no.2
+	# lcall $PROT_MODE_CSEG, $mp_main
 	# If mp_main returns (it shouldn't), loop.
 spin:
 	jmp     spin

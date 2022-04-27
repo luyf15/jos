@@ -199,7 +199,7 @@ env_setup_vm(struct Env *e)
 //	-E_NO_MEM on memory exhaustion
 //
 int
-env_alloc(struct Env **newenv_store, envid_t parent_id)
+env_alloc(struct Env **newenv_store, envid_t parent_id, uint32_t priority)
 {
 	int32_t generation;
 	int r;
@@ -378,13 +378,13 @@ load_icode(struct Env *e, uint8_t *binary)
 // The new env's parent ID is set to 0.
 //
 void
-env_create(uint8_t *binary, enum EnvType type)
+env_create(uint8_t *binary, enum EnvType type, uint32_t priority)
 {
 	// LAB 3: Your code here.
 	struct Env *e;
 	int err;
 
-	if ((err = env_alloc(&e, 0)) < 0)
+	if ((err = env_alloc(&e, 0, priority)) < 0)
 		panic("env_create: %e", err);
 
 	load_icode(e, binary);
@@ -521,10 +521,14 @@ env_run(struct Env *e)
 	// LAB 3: Your code here.
 	if (curenv && curenv->env_status == ENV_RUNNING)
 		curenv->env_status = ENV_RUNNABLE;
+	e->env_status = ENV_RUNNING;
+	e->env_runs += 1;
+
+	// avoid page table loading twice(only switch to a new process)
+	if (curenv != e)
+		lcr3(PADDR(e->env_pgdir));
 	curenv = e;
-	curenv->env_status = ENV_RUNNING;
-	curenv->env_runs += 1;
-	lcr3(PADDR(curenv->env_pgdir));
-	env_pop_tf(&curenv->env_tf);
+	unlock_kernel();
+	env_pop_tf(&e->env_tf);
 	// panic("env_run not yet implemented");
 }

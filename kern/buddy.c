@@ -54,19 +54,14 @@ buddy_init_memmap(struct Page *base, size_t n)
 		p->zone_num = zone_num;
 		set_page_ref(p, 0);
 	}
-	zones[zone_num++].mem_base = base;
+	p = zones[zone_num++].mem_base = base;
 	size_t order = MAX_ORDER, order_size = (1 << order);
-
-	// if (n <= order_size)
-	p = base;
-	// else
-	// 	p = base + n - 1 - order_size;
 
 	while (n != 0) {
 		while (n >= order_size) {
 			p->property = order;
 			SetPageProperty(p);
-			ClearPageReserved(p);
+			// ClearPageReserved(p);
 			list_add(&page_free_list(order), &(p->pp_link));	//avoid access of unmapped high address while bootstrapping
 			n -= order_size, p += order_size;
 			nr_free(order)++;
@@ -90,14 +85,6 @@ buddy_page_init(void)
 	//jump over the gap between Base(IO) and Extended
     for (i = 0; i < npages; i ++)
         MARK_USE(i);
-    /*
-    MARK_USE(0);
-    for (i = IOPHYSMEM / PGSIZE; i < EXTPHYSMEM / PGSIZE; ++i)
-        MARK_USE(i);
-	//kernel_base to last boot_alloc end
-    for (i = EXTPHYSMEM / PGSIZE; i < boot_alloc_end / PGSIZE; ++i)
-        MARK_USE(i);
-    */
     //[1, npages_basemem)
     buddy_init_memmap(&pages[1], MPCT - 1);
 	//[1, npages_basemem)

@@ -43,4 +43,7 @@ void lapic_startap(uint8_t apicid, uint32_t addr);
 void lapic_eoi(void);
 void lapic_ipi(int vector);
 
+// in kern/cpuid.c
+void init_cpuid(void);
+
 #endif

@@ -14,8 +14,9 @@
 #include <kern/kdebug.h>
 #include <kern/trap.h>
 
-#define CMDBUF_SIZE	80	// enough for one VGA text line
 extern pde_t *kern_pgdir;
+
+#define CMDBUF_SIZE	80	// enough for one VGA text line
 
 struct Command {
 	const char *name;
@@ -60,10 +61,12 @@ int
 mon_kerninfo(int argc, char **argv, struct Trapframe *tf)
 {
 	extern char _start[], entry[], etext[], edata[], end[];
+	extern unsigned char percpu_kstacks[][KSTKSIZE];
 
 	cprintf(F_blue B_white"Special kernel symbols:"ATTR_OFF"\n");
 	set_fgcolor(COLOR_MAGENTA);
 	cprintf("  _start                  %08x (phys)\n", _start);
+	cprintf("  kstack %08x (virt)  %08x (phys)\n",percpu_kstacks, percpu_kstacks -KERNBASE);
 	cprintf("  entry  %08x (virt)  %08x (phys)\n", entry, entry - KERNBASE);
 	cprintf("  etext  %08x (virt)  %08x (phys)\n", etext, etext - KERNBASE);
 	cprintf("  edata  %08x (virt)  %08x (phys)\n", edata, edata - KERNBASE);
@@ -75,28 +78,44 @@ mon_kerninfo(int argc, char **argv, struct Trapframe *tf)
 	return 0;
 }
 
+static inline bool
+is_user_addr(uintptr_t addr)
+{
+	return (addr <= ULIM);
+}
+
 int
 mon_backtrace(int argc, char **argv, struct Trapframe *tf)
 {
-	uint32_t ebp = read_ebp();
+	uintptr_t ebp = read_ebp();
 	set_fgcolor(COLOR_CYAN);
 	set_bgcolor(COLOR_YELLOW);
 	cprintf("Stack backtrace");
 	reset_bgcolor();
 	set_fgcolor(COLOR_RED);
 	while (ebp){
-		uint32_t eip = (uint32_t)*((int *)ebp + 1);
+		if (!curenv && is_user_addr(ebp))
+			break;
+		uintptr_t eip = (uintptr_t)*((int *)ebp + 1);
 		cprintf("\nebp %x  eip %x  args", ebp, eip);
 		int *args = (int *)ebp + 2;
-		for (int i = 0; i < 4; i++)
-			cprintf(" %08.x ", args[i]);
+		if (is_user_addr(ebp)) {
+			for (int i = 0;
+				 i < MIN((USTACKTOP - (uintptr_t)args)/4, 4); i++)
+				cprintf(" %08.x ", args[i]);
+		}
+		else {
+			for (int i = 0; i < 4; i++)
+				cprintf(" %08.x ", args[i]);
+		}
+
 		cprintf("\n");
 		struct Eipdebuginfo info;
 		debuginfo_eip(eip, &info);
 		cprintf("\t%s:%d: %.*s+%d\n",
 			info.eip_file, info.eip_line,
 			info.eip_fn_namelen, info.eip_fn_name, eip-info.eip_fn_addr);
-		ebp = *(uint32_t *)ebp;
+		ebp = *(uintptr_t *)ebp;
 		//count++ ;
 	}
 	reset_fgcolor();
@@ -199,6 +218,7 @@ str2perm(char* str){
 #define PTE_PTR(pgdir,va) (((pte_t*) KADDR(PTE_ADDR(PDE(pgdir,va)))) + PTX(va))
 #define PTE(pgdir,va) (*(PTE_PTR(pgdir,va)))
 #define PERM(entry) (entry & 0xFFF)
+#define CUR_PDDIR (curenv ? curenv->env_pgdir : kern_pgdir)
 
 int
 mon_showmap(int argc, char **argv, struct Trapframe *tf)
@@ -225,7 +245,7 @@ mon_showmap(int argc, char **argv, struct Trapframe *tf)
 		//cprintf("vstart: 0x%08x, vend: 0x%08x\n", vstart, vend);
 		char permission[10] = { 0 };
 		// permission[9] = '\0';
-		pde = PDE((curenv?curenv->env_pgdir:kern_pgdir), vstart);
+		pde = PDE(CUR_PDDIR, vstart);
 		if (pde & PTE_P) {
 			if (pde & PTE_PS) {
 				physaddr_t pvaddr = PTE_ADDR(pde) | (PTX(vstart) << PTXSHIFT);
@@ -236,7 +256,7 @@ mon_showmap(int argc, char **argv, struct Trapframe *tf)
 				vstart += LPGSIZE;
 			}
 			else {
-				pte = PTE((curenv?curenv->env_pgdir:kern_pgdir), vstart);
+				pte = PTE(CUR_PDDIR, vstart);
 				if (pte & PTE_P) {
 					cprintf("pte perm:0x%03x\n", PERM(pte));
 					perm2str(permission, PERM(pte));
@@ -283,8 +303,9 @@ mon_setperm(int argc, char **argv, struct Trapframe *tf)
 	permission[9]='\0';
 	strncpy(permission, argv[2], 9);
 	perm = str2perm(permission);
-	//cprintf("perm=0x%03x\n", perm);
-	pde = curenv ? &curenv->env_pgdir[PDX(va)] : &kern_pgdir[PDX(va)];
+	// cprintf("perm=0x%03x\n", perm);
+	// pde = curenv ? &curenv->env_pgdir[PDX(va)] : &kern_pgdir[PDX(va)];
+	pde = &CUR_PDDIR[PDX(va)];
 	if (*pde & PTE_PS){
 		if (*pde & PTE_P) {
 			*pde = (*pde & ~0xFFF) | perm | PTE_P | PTE_PS;
@@ -296,7 +317,7 @@ mon_setperm(int argc, char **argv, struct Trapframe *tf)
 			return 1;
 		}
 	} else {
-		pte = pgdir_walk((curenv?curenv->env_pgdir:kern_pgdir), (void*)va, 0);
+		pte = pgdir_walk(CUR_PDDIR, (void*)va, 0);
 		if (pte && *pte & PTE_P) {
 			*pte = (*pte & ~0xFFF) | (perm & 0xFFF) | PTE_P;
 			cprintf("New mapping = VA: 0x%08x, PA: 0x%08x, perm: 0x%03x.\n",
@@ -357,26 +378,26 @@ mon_dumpmem(int argc, char **argv, struct Trapframe *tf)
 			"Only dump to TOP.\n");
 			mend = ~KERNBASE + 1;
         }
-        for (; mstart < mend; ++mstart) {
+        for (; mstart < mend; ++mstart) 
             cprintf("[PA 0x%08x]: %02x\n", mstart, *(uint8_t*)KADDR(mstart));
-        }
-    } else {
+    } 
+	else {
         uint32_t next;
         pte_t *pte;
         while(mstart < mend) {
-			if (PDE((curenv?curenv->env_pgdir:kern_pgdir), mstart) & PTE_PS) {
-				if (PDE((curenv?curenv->env_pgdir:kern_pgdir), mstart) & PTE_P) {
+			if (PDE(CUR_PDDIR, mstart) & PTE_PS) {
+				if (PDE(CUR_PDDIR, mstart) & PTE_P) {
 					next = MIN((uint32_t)PGADDR(PDX(mstart), PTX(mstart) + 1, 0), mend);
 					for (; mstart < next; ++mstart)
 						cprintf("[VA 0x%08x, PA 0x%08x]: %02x\n",
-						 mstart, PTE_ADDR(PDE((curenv?curenv->env_pgdir:kern_pgdir), mstart))
+						 mstart, PTE_ADDR(PDE(CUR_PDDIR, mstart))
 						 |(PTX(mstart) << PTXSHIFT)|PGOFF(mstart), *(uint8_t*)mstart);
 				} else {
 					cprintf("[VA 0x%08x, PA No-mapping]: None\n", mstart);
 
 				}
 			} else {
-				if (!(pte = pgdir_walk((curenv?curenv->env_pgdir:kern_pgdir), (void*)mstart, 0))) {
+				if (!(pte = pgdir_walk(CUR_PDDIR, (void*)mstart, 0))) {
 					next = MIN((uint32_t)PGADDR(PDX(mstart) + 1, 0, 0), mend);
 					for (; mstart < next; ++mstart)
 						cprintf("[VA 0x%08x, PA No-mapping]: None\n", mstart);
