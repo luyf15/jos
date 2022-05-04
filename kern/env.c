@@ -125,6 +125,7 @@ env_init(void)
         e = &envs[i];
         e->env_id = 0;
         e->env_status = ENV_FREE;
+		e->env_priority = 0;
         e->env_link = env_free_list;	//singly link backwards
         env_free_list = e;	//link backwards
     }

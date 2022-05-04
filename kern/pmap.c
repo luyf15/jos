@@ -110,7 +110,7 @@ page_init(void)
 //
 struct Page *alloc_pages(size_t n, int alloc_flags)
 {
-	struct Page *page=NULL;
+	struct Page *page = NULL;
 	page = pmm_manager->alloc_pages(n, alloc_flags);
 	return page;
 }

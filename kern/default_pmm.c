@@ -135,7 +135,7 @@ default_alloc_pages(size_t n, int alloc_flags)
 			SetPageReserved(p);
 			nr_free -= n;
 			if (alloc_flags & ALLOC_ZERO)
-				memset(page2kva(p), 0, PGSIZE*n);		//init pages from kaddr(target)
+				memset(page2kva(p), 0, PGSIZE * n);		//init pages from kaddr(target)
 			return p;
     	}
     }
@@ -199,7 +199,6 @@ default_nr_free_pages(void)
 {
 	return nr_free;
 }
-
 
 //
 // Check the physical page allocator (alloc_page(), free_page(),

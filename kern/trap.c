@@ -1,6 +1,7 @@
 #include <inc/mmu.h>
 #include <inc/x86.h>
 #include <inc/assert.h>
+#include <inc/stdio.h>
 
 #include <kern/pmap.h>
 #include <kern/trap.h>
@@ -305,7 +306,6 @@ trap(struct Trapframe *tf)
 		sched_yield();
 }
 
-
 void
 page_fault_handler(struct Trapframe *tf)
 {
@@ -316,8 +316,11 @@ page_fault_handler(struct Trapframe *tf)
 
 	// Handle kernel-mode page faults.
 	// LAB 3: Your code here.
-	if(!(tf->tf_cs & 0x3))
-		panic("trap_handler: Kernel page fault");
+	if(!(tf->tf_cs & 0x3)) {
+        print_trapframe(tf);
+        panic("[%08x] kernel fault va %08x ip %08x\n",
+		    curenv->env_id, fault_va, tf->tf_eip);
+    }
 	// We've already handled kernel-mode exceptions, so if we get here,
 	// the page fault happened in user mode.
 
@@ -351,7 +354,55 @@ page_fault_handler(struct Trapframe *tf)
 	//   (the 'tf' variable points at 'curenv->env_tf').
 
 	// LAB 4: Your code here.
+	// NULL function potiner check
+	if (!curenv->env_pgfault_upcall) {
+		log("null upcall pointer");
+		goto bad;
+	}
 
+	// check whether upcall and xstack are in user spaces
+	user_mem_assert(curenv, (void *)curenv->env_pgfault_upcall, 0, PTE_U);
+    user_mem_assert(curenv, (void *)(UXSTACKTOP - 1), 0, PTE_U | PTE_W);
+
+	// check uxstack overflow (pgfault within stack gap)
+	if (fault_va < UXSTACKTOP - PGSIZE
+		&& fault_va >= UXSTACKTOP - PGSIZE * 2) {
+		log("uxstack overflow");
+		goto bad;
+	}
+	
+	// create a user trapframe
+	uintptr_t xesp;
+	struct UTrapframe *utf;
+
+	// if there is a recursive pgfault
+	// when trap_time esp is [UXSTACKTOP-PGSIZE,UXSTACKTOP)
+	if (tf->tf_esp >= (UXSTACKTOP - PGSIZE) 
+				&& tf->tf_esp < UXSTACKTOP)
+		xesp = tf->tf_esp - (sizeof(struct UTrapframe) + 4);
+	else
+		xesp = UXSTACKTOP - sizeof(struct UTrapframe);
+	
+	// check uxstack overflow (pgfault within stack gap)
+	if (xesp < UXSTACKTOP - PGSIZE) {
+		log("uxstack overflow");
+		goto bad;
+	}
+
+	utf = (struct UTrapframe *)xesp;
+	utf->utf_fault_va = fault_va;
+	utf->utf_err = tf->tf_err;
+	utf->utf_eip = tf->tf_eip;
+	utf->utf_esp = tf->tf_esp;
+	utf->utf_regs = tf->tf_regs;
+	utf->utf_eflags = tf->tf_eflags;
+
+	// modify tf_esp and tf_eip to go into upcall entry
+	tf->tf_esp = xesp;
+	tf->tf_eip = (uintptr_t)curenv->env_pgfault_upcall;
+	env_run(curenv);
+
+bad: 
 	// Destroy the environment that caused the fault.
 	cprintf("[%08x] user fault va %08x ip %08x\n",
 		curenv->env_id, fault_va, tf->tf_eip);
