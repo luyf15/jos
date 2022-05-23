@@ -95,7 +95,7 @@ i386_init(void)
 	ENV_CREATE(TEST, ENV_TYPE_USER);
 #else
 	// Touch all you want.
-	ENV_CREATE(user_faultalloc, ENV_TYPE_USER);
+	ENV_CREATE(user_forktree, ENV_TYPE_USER);
 	// ENV_CREATE(user_hello, ENV_TYPE_USER, 10);
 
 #endif // TEST*

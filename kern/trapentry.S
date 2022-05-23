@@ -89,6 +89,9 @@ spin_trap:
 	movl %esi,%edx # return eip
 	movl %ebp,%ecx # user space esp
 	
+	# before returning to userspace
+	# enable the interrupt
+	sti
 	sysexit
 
 .data

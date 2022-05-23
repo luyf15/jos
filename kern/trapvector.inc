@@ -7,13 +7,13 @@ TH(5)
 TH(6)
 TH(7)
 THE(8)
-THE(9)
+THE(9)  //reserved
 THE(10)
 THE(11)
 THE(12)
 THE(13)
 THE(14)
-TH(15)
+TH(15)  // reserved
 TH(16)
 THE(17)
 TH(18)
@@ -30,20 +30,23 @@ TH(28)
 TH(29)
 TH(30)
 TH(31)
-TH(32)
-TH(33)
+// IRQ_OFFSET+n
+TH(32) // TIMER
+TH(33) // KBD
 TH(34)
 TH(35)
-TH(36)
+TH(36) // SERIAL
 TH(37)
 TH(38)
-TH(39)
+TH(39) // SPURIOUS
 TH(40)
 TH(41)
 TH(42)
 TH(43)
 TH(44)
 TH(45)
-TH(46)
+TH(46) // IDE
 TH(47)
-TH(48)
+TH(48) // SYSCALL
+// Other interrupt
+TH(51) // ERROR

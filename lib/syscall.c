@@ -102,7 +102,7 @@ sys_cgetc(void)
 int
 sys_env_destroy(envid_t envid)
 {
-	return syscall(SYS_env_destroy, 1, envid, 0, 0, 0, 0);
+	return fast_syscall(SYS_env_destroy, 1, envid, 0, 0, 0, 0);
 }
 
 envid_t
@@ -114,25 +114,31 @@ sys_getenvid(void)
 void
 sys_yield(void)
 {
-	syscall(SYS_yield, 0, 0, 0, 0, 0, 0);
+	fast_syscall(SYS_yield, 0, 0, 0, 0, 0, 0);
+}
+
+envid_t
+sys_fork(unsigned char end[])
+{
+	return fast_syscall(SYS_fork, 0, (uint32_t) end, 0, 0, 0, 0);
 }
 
 int
 sys_page_alloc(envid_t envid, void *va, int perm)
 {
-	return syscall(SYS_page_alloc, 1, envid, (uint32_t) va, perm, 0, 0);
+	return fast_syscall(SYS_page_alloc, 1, envid, (uint32_t) va, perm, 0, 0);
 }
 
 int
 sys_page_map(envid_t srcenv, void *srcva, envid_t dstenv, void *dstva, int perm)
 {
-	return syscall(SYS_page_map, 1, srcenv, (uint32_t) srcva, dstenv, (uint32_t) dstva, perm);
+	return fast_syscall(SYS_page_map, 1, srcenv, (uint32_t) srcva, dstenv, (uint32_t) dstva, perm);
 }
 
 int
 sys_page_unmap(envid_t envid, void *va)
 {
-	return syscall(SYS_page_unmap, 1, envid, (uint32_t) va, 0, 0, 0);
+	return fast_syscall(SYS_page_unmap, 1, envid, (uint32_t) va, 0, 0, 0);
 }
 
 // sys_exofork is inlined in lib.h
@@ -140,13 +146,13 @@ sys_page_unmap(envid_t envid, void *va)
 int
 sys_env_set_status(envid_t envid, int status)
 {
-	return syscall(SYS_env_set_status, 1, envid, status, 0, 0, 0);
+	return fast_syscall(SYS_env_set_status, 1, envid, status, 0, 0, 0);
 }
 
 int
 sys_env_set_pgfault_upcall(envid_t envid, void *upcall)
 {
-	return syscall(SYS_env_set_pgfault_upcall, 1, envid, (uint32_t) upcall, 0, 0, 0);
+	return fast_syscall(SYS_env_set_pgfault_upcall, 1, envid, (uint32_t) upcall, 0, 0, 0);
 }
 
 int

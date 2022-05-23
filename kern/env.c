@@ -200,7 +200,7 @@ env_setup_vm(struct Env *e)
 //	-E_NO_MEM on memory exhaustion
 //
 int
-env_alloc(struct Env **newenv_store, envid_t parent_id, uint32_t priority)
+env_alloc(struct Env **newenv_store, envid_t parent_id, uint8_t priority)
 {
 	int32_t generation;
 	int r;
@@ -224,6 +224,7 @@ env_alloc(struct Env **newenv_store, envid_t parent_id, uint32_t priority)
 	e->env_type = ENV_TYPE_USER;
 	e->env_status = ENV_RUNNABLE;
 	e->env_runs = 0;
+	e->env_priority = priority % 32 + 1;
 
 	// Clear out all the saved register state,
 	// to prevent the register values
@@ -245,6 +246,7 @@ env_alloc(struct Env **newenv_store, envid_t parent_id, uint32_t priority)
 	e->env_tf.tf_esp = USTACKTOP;
 	e->env_tf.tf_cs = GD_UT | 3;
 	// You will set e->env_tf.tf_eip later.
+	e->env_tf.tf_eflags |= FL_IF;
 
 	// Enable interrupts while in user mode.
 	// LAB 4: Your code here.
@@ -378,8 +380,9 @@ load_icode(struct Env *e, uint8_t *binary)
 // before running the first user-mode environment.
 // The new env's parent ID is set to 0.
 //
+// The parameter priority is [0, 255]
 void
-env_create(uint8_t *binary, enum EnvType type, uint32_t priority)
+env_create(uint8_t *binary, enum EnvType type, uint8_t priority)
 {
 	// LAB 3: Your code here.
 	struct Env *e;

@@ -39,6 +39,7 @@ void	set_pgfault_handler(void (*handler)(struct UTrapframe *utf));
 char*	readline(const char *buf);
 
 // syscall.c
+envid_t sys_fork(unsigned char end[]);
 void	sys_cputs(const char *string, size_t len);
 int	sys_cgetc(void);
 envid_t	sys_getenvid(void);
@@ -73,6 +74,7 @@ envid_t	ipc_find_env(enum EnvType type);
 // fork.c
 #define	PTE_SHARE	0x400
 envid_t	fork(void);
+envid_t bfork(void);
 envid_t	sfork(void);	// Challenge!
 
 

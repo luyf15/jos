@@ -101,7 +101,7 @@ page_init(void)
 // --------------------------------------------------------------
 
 
-// Allocates a physical page.  If (alloc_flags & ALLOC_ZERO), fills the entire
+// Allocates some physical pages.  If (alloc_flags & ALLOC_ZERO), fills the entire
 // returned physical page with '\0' bytes.  Does NOT increment the reference
 // count of the page - the caller must do these if necessary (either explicitly
 // or via page_insert).
@@ -115,7 +115,7 @@ struct Page *alloc_pages(size_t n, int alloc_flags)
 	return page;
 }
 
-// Return a page to the free list.
+// Return some pages to the free list.
 // (This function should only be called when pp->pp_ref reaches 0.)
 //
 void

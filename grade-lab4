@@ -35,7 +35,7 @@ end_part("A")
 def test_faultread():
     r.user_test("faultread")
     r.match(E(".$E1. user fault va 00000000 ip 008....."),
-            "TRAP frame at 0xf....... from CPU .",
+            "TRAP frame at 0xe....... from CPU .",
             "  trap 0x0000000e Page Fault",
             "  err  0x00000004.*",
             E(".$E1. free env $E1"),
@@ -45,7 +45,7 @@ def test_faultread():
 def test_faultwrite():
     r.user_test("faultwrite")
     r.match(E(".$E1. user fault va 00000000 ip 008....."),
-            "TRAP frame at 0xf....... from CPU .",
+            "TRAP frame at 0xe....... from CPU .",
             "  trap 0x0000000e Page Fault",
             "  err  0x00000006.*",
             E(".$E1. free env $E1"))
@@ -85,7 +85,7 @@ def test_faultallocbad():
 @test(5)
 def test_faultnostack():
     r.user_test("faultnostack")
-    r.match(E(".$E1. user_mem_check assertion failure for va eebfff.."),
+    r.match(E(".$E1. user_mem_check assertion failure for va debfff.."),
             E(".$E1. free env $E1"))
 
 @test(5)

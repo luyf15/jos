@@ -163,6 +163,92 @@ sys_env_set_pgfault_upcall(envid_t envid, void *func)
 		return -E_INVAL;	\
 } while (0)
 
+static struct Env *
+fork_exofork(void)
+{
+	struct Env *e;
+
+	// allocate empty env
+	if(env_alloc(&e, curenv->env_id, curenv->env_priority + 1) < 0)
+		return NULL;
+
+	// child process has the same register states
+	// except for %eax, which implies the return value,
+	// 0 for child process
+	e->env_tf = curenv->env_tf;
+	e->env_tf.tf_regs.reg_eax = 0;
+
+	// inherit parent's page fault handler
+	e->env_pgfault_upcall = curenv->env_pgfault_upcall;
+	
+	return e;
+}
+
+static int
+fork_page_map(struct Env *dstenv, void *srcva, void *dstva, int perm)
+{
+	struct Page *pp;
+	pte_t *pte;
+	int r;
+	
+	// check va arrange legitimacy  and page-aligned
+	CHECK_PGALIGN_UVA(srcva);
+	CHECK_PGALIGN_UVA(dstva);
+	CHECK_SYSCALL_PERM(perm);
+
+	// check src already has mapping for srcva
+	if(!(pp = page_lookup(curenv->env_pgdir, srcva, &pte)))
+		return -E_INVAL;
+	
+	// perform mapping
+	if((r = page_insert(dstenv->env_pgdir, pp, dstva, perm)) < 0)
+		return r;
+	return 0;
+}
+
+static int
+fork_duppage(struct Env *childenv, void *va)
+{
+	pte_t pte = *pgdir_walk(curenv->env_pgdir, va, 0);
+	int r;
+
+	// duppage only if the page is present and belongs to user
+	if (!(pte & PTE_P) || !(pte & PTE_U))
+		return 0;
+	if ((pte & PTE_W) || (pte & PTE_COW)) {
+		if ((r = fork_page_map(childenv, va, va, PTE_P | PTE_U | PTE_COW))<0)
+			return r;
+		if ((r = fork_page_map(curenv, va, va, PTE_P | PTE_U | PTE_COW))<0)
+			return r;
+	} else {
+		if ((r = fork_page_map(childenv, va, va, PTE_P | PTE_U)) < 0)
+			return r;
+	}
+	return 0;
+}
+
+static int
+fork_page_alloc(struct Env *e, void *va, int perm)
+{
+	struct Page *pp;
+	int r;
+
+	CHECK_PGALIGN_UVA(va);
+	CHECK_SYSCALL_PERM(perm);
+
+	// allocate page
+	if(!(pp = alloc_page(ALLOC_ZERO)))
+		return -E_NO_MEM;
+	
+	// insert
+	if((r = page_insert(e->env_pgdir, pp, va, perm)) < 0){
+		// free allocated page before return with ror
+		free_page(pp);
+		return r;
+	}
+	return 0;
+}
+
 // Allocate a page of memory and map it at 'va' with permission
 // 'perm' in the address space of 'envid'.
 // The page's contents are set to 0.
@@ -203,10 +289,10 @@ sys_page_alloc(envid_t envid, void *va, int perm)
 	if (!(pp = alloc_page(ALLOC_ZERO)))
 		return -E_NO_MEM;
 	
-	int err;
-	if ((err = page_insert(e->env_pgdir, pp, va, perm)) < 0) {
+	int r;
+	if ((r = page_insert(e->env_pgdir, pp, va, perm)) < 0) {
 		free_page(pp);
-		return err;
+		return r;
 	}
 	return 0;
 }
@@ -243,7 +329,7 @@ sys_page_map(envid_t srcenvid, void *srcva,
 	struct Env *srce,*dste;
 	pte_t *pte;
 	struct Page *pp;
-	int err;
+	int r;
 
 	CHECK_PGALIGN_UVA(srcva);
 	CHECK_PGALIGN_UVA(dstva);
@@ -256,8 +342,8 @@ sys_page_map(envid_t srcenvid, void *srcva,
 		return -E_INVAL;
 	if ((~(*pte) & PTE_W) && (perm & PTE_W))
 		return -E_INVAL;
-	if ((err = page_insert(dste->env_pgdir, pp, dstva, perm)) < 0)
-		return err;
+	if ((r = page_insert(dste->env_pgdir, pp, dstva, perm)) < 0)
+		return r;
 	
 	return 0;
 }
@@ -276,18 +362,75 @@ sys_page_unmap(envid_t envid, void *va)
 
 	// LAB 4: Your code here.
 	// panic("sys_page_unmap not implemented");
-	int err;
+	int r;
 	struct Env *e;
 
 	CHECK_PGALIGN_UVA(va);
-	if ((err = envid2env(envid, &e, 1)) < 0)
-		return err;
+	if ((r = envid2env(envid, &e, 1)) < 0)
+		return r;
 	page_remove(e->env_pgdir, va);
 	
 	return 0;
 }
 #undef CHECK_PGALIGN_UVA
 #undef CHECK_SYSCALL_PERM
+
+// a kernel-implemented fork syscall function
+// end[] is defined in user/user.ld, 
+// which is the end address of user binary
+static envid_t
+sys_fork(unsigned char *end)
+{
+	uintptr_t va;
+	int r;
+	struct Env *childenv;
+
+	// lock_env();
+	// lock_page();
+
+	// create env for child process
+	if (!(childenv = fork_exofork())) {
+		// unlock_page();
+		// unlock_env();
+		return -E_NO_MEM;
+	}
+	
+	// duplicate stack page
+	fork_duppage(childenv,
+		 (void *)ROUNDDOWN(curenv->env_tf.tf_esp, PGSIZE));
+	
+	// allocate exception stack for child process
+	// and copy to it with PTE_W directly set
+	if((r = fork_page_alloc(curenv,
+			 (void *)PFTEMP, PTE_W | PTE_U | PTE_P)) < 0){
+		// unlock_page();
+		// unlock_env();
+		return r;
+	}
+
+	// copy the user exception stack of parent(curenv)
+	memmove((void *)PFTEMP, (void *)(UXSTACKTOP - PGSIZE), PGSIZE);
+
+	if((r = fork_page_map(childenv, (void *)PFTEMP, 
+			(void *)(UXSTACKTOP - PGSIZE), PTE_P | PTE_U | PTE_W)) < 0){
+		// unlock_page();
+		// unlock_env();
+		return r;
+	}
+
+	page_remove(curenv->env_pgdir, (void*)PFTEMP);
+
+	// duplicate all other pages
+	for(va = 0; va < (uintptr_t)end; va += PGSIZE)
+		fork_duppage(childenv, (void *)va);
+	
+	// mark child process as runnable
+	childenv->env_status = ENV_RUNNABLE;
+
+	// unlock_page();
+	// unlock_env();
+	return childenv->env_id;
+}
 
 // Try to send 'value' to the target env 'envid'.
 // If srcva < UTOP, then also send page currently mapped at 'srcva',
@@ -371,10 +514,11 @@ syscall(uint32_t syscallno, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4, 
 			return sys_env_destroy((envid_t)a1);
 		case SYS_getenvid: 
 			return sys_getenvid();
-		case SYS_yield: {
+		case SYS_yield:
 			sys_yield();
 			return 0;
-		}
+		case SYS_fork:
+			return sys_fork((unsigned char *)a1);
 		case SYS_page_alloc:
 			return sys_page_alloc(a1, (void *)a2, a3);
 		case SYS_page_map:
@@ -410,6 +554,7 @@ fast_syscall(uint32_t syscallno, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t
 	// 	sched_yield();
 	// }
 	// unlock_env();
+	lock_kernel();
 	
 	// save trapframe of current environment in curenv
 	save_curenv_trapframe();
@@ -419,7 +564,7 @@ fast_syscall(uint32_t syscallno, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t
 	// LAB 3: Your code here.
 	switch (syscallno) {
 	case SYS_cputs:	
-		sys_cputs((char*)a1, a2);
+		sys_cputs((char *)a1, a2);
 		ret = 0;
 		break;
 	case SYS_cgetc: 
@@ -432,13 +577,13 @@ fast_syscall(uint32_t syscallno, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t
 		ret = sys_env_destroy(a1);
 		break;
 	case SYS_page_alloc:
-		ret = sys_page_alloc(a1, (void*)a2, a3);
+		ret = sys_page_alloc(a1, (void *)a2, a3);
 		break;
 	case SYS_page_map:
-		ret = sys_page_map(a1, (void*)a2, a3, (void*)a4, a5);
+		ret = sys_page_map(a1, (void *)a2, a3, (void *)a4, a5);
 		break;
 	case SYS_page_unmap:
-		ret = sys_page_unmap(a1, (void*)a2);
+		ret = sys_page_unmap(a1, (void *)a2);
 		break;
 	case SYS_exofork:
 		ret = sys_exofork();
@@ -447,17 +592,20 @@ fast_syscall(uint32_t syscallno, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t
 		ret = sys_env_set_status(a1, a2);
 		break;
 	case SYS_env_set_pgfault_upcall:
-		ret = sys_env_set_pgfault_upcall(a1, (void*)a2);
+		ret = sys_env_set_pgfault_upcall(a1, (void *)a2);
+		break;
+	case SYS_fork:
+		ret = sys_fork((unsigned char *)a1);
 		break;
 	case SYS_yield:
 		sys_yield();
 		ret = 0;
 		break;
 	case SYS_ipc_try_send:
-		ret = sys_ipc_try_send(a1, a2, (void*)a3, a4);
+		ret = sys_ipc_try_send(a1, a2, (void *)a3, a4);
 		break;
 	case SYS_ipc_recv:
-		ret = sys_ipc_recv((void*)a1);
+		ret = sys_ipc_recv((void *)a1);
 		break;
 	default:
 		ret= -E_INVAL;
@@ -478,13 +626,13 @@ fast_syscall(uint32_t syscallno, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t
 	// restore user eflags with IF diabled
 	// (later enable it right before 'sysexit' instruction)
 	// write_eflags(eflags&~FL_IF);
-
+	unlock_kernel();
 	return ret;
 }
 
 static inline 
 void save_curenv_trapframe(){
-	// asm volatile("mov %%esi,%0":"=a"(curenv->env_tf.tf_eip));
+	asm volatile("mov %%esi,%0":"=a"(curenv->env_tf.tf_eip));
 	asm volatile("mov (%%ebp),%0":"=a"(curenv->env_tf.tf_esp));
 	asm volatile("mov (%1),%0":"=a"(curenv->env_tf.tf_regs.reg_ebp):"a"(curenv->env_tf.tf_esp));
 	asm volatile("mov 4(%1),%0":"=a"(curenv->env_tf.tf_eflags):"a"(curenv->env_tf.tf_esp));

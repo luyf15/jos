@@ -50,7 +50,7 @@ buddy_init_memmap(struct Page *base, size_t n)
 	struct Page *p = base;
 	for (; p != base + n; p++) {
 		assert(PageReserved(p));
-		p->flags = p->property = 0;
+		p->flags = p->property = 0;		// PageReserved Clear
 		p->zone_num = zone_num;
 		set_page_ref(p, 0);
 	}
@@ -61,7 +61,6 @@ buddy_init_memmap(struct Page *base, size_t n)
 		while (n >= order_size) {
 			p->property = order;
 			SetPageProperty(p);
-			// ClearPageReserved(p);
 			list_add(&page_free_list(order), &(p->pp_link));	//avoid access of unmapped high address while bootstrapping
 			n -= order_size, p += order_size;
 			nr_free(order)++;
@@ -74,8 +73,8 @@ buddy_init_memmap(struct Page *base, size_t n)
 static void
 buddy_page_init(void)
 {
-    #define MARK_USE(_i) SetPageReserved(&pages[_i])
-	#define MPCT MPENTRY_PADDR / PGSIZE
+#define MARK_USE(_i) SetPageReserved(&pages[_i])
+#define MPCT MPENTRY_PADDR / PGSIZE
     //pages[_i].pp_ref = 0;
     //pages[_i].pp_link.next = &(pages[_i].pp_link);
 	//pages[_i].pp_link.prev = &(pages[_i].pp_link);
@@ -88,11 +87,11 @@ buddy_page_init(void)
     //[1, npages_basemem)
     buddy_init_memmap(&pages[1], MPCT - 1);
 	//[1, npages_basemem)
-    buddy_init_memmap(&pages[MPCT+1], npages_basemem - MPCT - 1);
+    buddy_init_memmap(&pages[MPCT + 1], npages_basemem - MPCT - 1);
     //[boot_alloc_end / PGSIZE, npages)
     buddy_init_memmap((struct Page *)(pages + boot_alloc_end / PGSIZE), npages - boot_alloc_end / PGSIZE);
-
-    #undef MARK_USE
+#undef MPCT
+#undef MARK_USE
 }
 
 //getorder - return order, the minmal 2^order >= n
